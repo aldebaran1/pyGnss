@@ -18,6 +18,8 @@ import h5py
 from mpl_toolkits.basemap import Basemap
 from gsit import pyGps
 from pyGnss import pyGnss 
+from pyGnss import gnssUtils
+import timeout_decorator
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
@@ -118,6 +120,7 @@ def lpf(y, fc=0.1, order=5, fs=1, plot=False, group_delay=False):
     gd = -np.diff(np.unwrap(np.angle(h)))/np.diff(w)
     print ('Group delay of the filter is '+ str(gd[1])+' samples.')
     if plot:
+    #    print (rec_lat, rec_lon, rx)
         plt.figure()
         plt.semilogx(w, np.log10(np.abs(h)))
         plt.ylim([-60,5])
@@ -147,17 +150,27 @@ def interpolateLatLon(lat, lon, order=3, resolution=0.1):
     y_new = f(x_new)
     return y_new, x_new
 
-def interpolateTEC(t,tec,order=20,maxjump=2):
-    idf = np.where(np.isfinite(tec))[0]
-    if np.diff(tec[idf]).max() <= maxjump:
-        x = np.arange(0,tec.shape[0])
-        z = np.polyfit(x[np.isfinite(tec)], tec[np.isfinite(tec)], order)
-        f = np.poly1d(z)
-        y = f(x)
-        mask = np.where(np.isnan(tec))[0]
-        tec[mask] = y[mask]
-#    print (np.diff(mask))
-    return tec
+def interpolateTEC(t,y,Ts=30, order=10):
+    t1, y1 = correctSampling(t,y,Ts=Ts)
+    x = np.arange(0,t1.shape[0])
+    mask = np.where(np.isnan(y1))
+    z = np.polyfit(x[np.isfinite(y1)], y1[np.isfinite(y1)], order)
+    f = np.poly1d(z)
+    y_fit = f(x)
+    y1[mask] = y_fit[mask]
+    return t1, y1
+
+#def interpolateTEC(t,tec,order=10,maxjump=2):
+#    idf = np.where(np.isfinite(tec))[0]
+#    if np.diff(tec[idf]).max() <= maxjump:
+#        x = np.arange(0,tec.shape[0])
+#        z = np.polyfit(x[np.isfinite(tec)], tec[np.isfinite(tec)], order)
+#        f = np.poly1d(z)
+#        y = f(x)
+#        mask = np.where(np.isnan(tec))[0]
+#        tec[mask] = y[mask]
+##    print (np.diff(mask))
+#    return tec
 
 #------------------------------------------------------------------------------#
 def polynom(y, order=3):
@@ -167,20 +180,31 @@ def polynom(y, order=3):
     y_new = f(x)
     return y_new
 #------------------------------------------------------------------------------#
-def correctSampling(t, y, fs=1):
-    ts = pyGps.datetime2posix(t)
-    td = np.diff(ts)
-    idt = np.where(td != fs)[0]
-    if idt.shape[0] > 0:
-        while True:
-            td = np.diff(ts)
-            idt = np.where(td != fs)[0]
-            if idt.shape[0] == 0:
-                break
-            ts = np.insert(ts, idt[0]+1, ts[idt[0]]+fs)
-            y = np.insert(y, idt[0]+1, np.NaN)
-    return ts, y
-#------------------------------------------------------------------------------#
+#def correctSampling(t, y, fs=1):
+#    ts = pyGps.datetime2posix(t)
+#    td = np.diff(ts)
+#    idt = np.where(td != fs)[0]
+#    if idt.shape[0] > 0:
+#        while True:
+#            td = np.diff(ts)
+#            idt = np.where(td != fs)[0]
+#            if idt.shape[0] == 0:
+#                break
+#            ts = np.insert(ts, idt[0]+1, ts[idt[0]]+fs)
+#            y = np.insert(y, idt[0]+1, np.NaN)
+#    return ts, y
+@timeout_decorator.timeout(1)
+def correctSampling(t,y,Ts=1):
+    if isinstance(t[0], datetime.datetime):
+        ts = gnssUtils.datetime2posix(t)
+    else:
+        ts = t
+    time_series = np.arange(int(ts[0]),int(ts[-1])+1,Ts)
+    y_out = np.nan*np.ones((time_series.shape[0]))
+    idt = np.where(np.isin(time_series,ts))[0]
+    y_out[idt] = y
+    return time_series, y_out
+##------------------------------------------------------------------------------#
 def returnSlope(t,y, fs=5, interval=5):
     skip = int(60/fs) * interval
     t_new = t[::skip]
@@ -299,13 +323,14 @@ def getRxList(folder, sufix):
         rx.append(tail[0:4])
     return rx
 #------------------------------------------------------------------------------#
-def createTimeArray(timelim):
+def createTimeArray(timelim,Ts=1):
     ts = pyGps.datetime2posix(timelim)
     t = range(int(ts[0]), int(ts[1])+1)
-    return np.array(t)
+    t = np.arange(int(ts[0]), int(ts[1])+1, Ts)
+    return t
 #------------------------------------------------------------------------------#
 def returnTotalityPath(width=False):
-    data = h5py.File('totality.h5', 'r')
+    data = h5py.File('/home/smrak/Documents/eclipse/totality.h5', 'r')
     time = np.array(data['path/time'])
     center_lat = np.array(data['path/center_lat'])
     center_lon = np.array(data['path/center_lon'])
@@ -368,9 +393,9 @@ def resBPFFilter(t, y, Ts=30):
     return bpf_td, bpf_res
 #------------------------------------------------------------------------------#
 
-def getRxListCoordinates(filename='corsrxlist.h5', FDIR = '/home/smrak/Documents/eclipse/'):
+def getRxListCoordinates(filename='/home/smrak/Documents/eclipse/corsrxlist.h5'):
 
-    with (h5py.File(FDIR+filename, 'r')) as f:
+    with (h5py.File(filename, 'r')) as f:
         names = f['/data/rx']
         data = f['/data/table']
         rx = [rx[0].decode('utf-8') for rx in names]
@@ -472,11 +497,11 @@ def returnTEC(data, sv, navfile, yamlfile, timelim=None, el_mask=30, leap_second
                 bstream = yaml.load(open('/media/smrak/Eclipse2017/Eclipse/jplg2330.yaml', 'r'))
                 sat_bias = float(bstream.get(sv))
                 tec = pyGnss.getVerticalTEC(tec+sat_bias, aer[1][idel], alt)
-            if rxbias and svbias == False:
+            if rxbias and svbias:
                 tec = pyGps.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
                 bstream = yaml.load(open('/media/smrak/Eclipse2017/Eclipse/jplg2330.yaml', 'r'))
                 sat_bias = float(bstream.get(sv))
-                rx_bias = RxbiasEstimator(RxB[0], RxB[1], t[idel], tec, sat_bias, el=aer[1][idel], IPPalt=350)
+                rx_bias = RxbiasEstimator(RxB[0], RxB[1], t[idel], tec, sat_bias, el=aer[1][idel], IPPalt=alt)
                 print (rx_bias)
                 tec = pyGnss.getVerticalTEC(tec+sat_bias+rx_bias, aer[1][idel], alt)
             if svbias == False and rxbias == False:
@@ -576,6 +601,22 @@ def getResiduals(rxlist=['mobu'],decimate='_30',sv=2,day=233,Ts=30,el_mask=20,
     else:
         return time, res
 ################################################################################
+def getPlainResidual(tec, Ts=1, polynom=False):
+    intervals = getIntervals(tec, maxgap=1, maxjump=1)
+    pp = np.nan*np.ones(tec.shape[0])
+    for lst in intervals:
+        if lst[1]-lst[0] > 10:
+            polynom_order = getPolynomOrder(lst, Ts)
+            pp[lst[0]:lst[1]] = polynom(tec[lst[0]:lst[1]], order=polynom_order)
+    polyfit = pp
+    polyfit[:10] = np.nan
+    polyfit[-10:] = np.nan
+    
+    y = tec - polyfit
+    if polynom:
+        return y, polyfit
+    else:
+        return y
 
 ################################################################################
 def _plotLOS(tlist, teclist, polylist, residuallist, rx='', sv=0, save=False,
