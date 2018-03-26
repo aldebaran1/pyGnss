@@ -8,7 +8,7 @@ smrak@bu.edu
 import numpy as np
 from scipy import interpolate
 from pandas import DataFrame
-from pymap3d.coordconv3d import ecef2geodetic,ecef2aer,aer2geodetic
+from pymap3d import ecef2geodetic,ecef2aer,aer2geodetic
 import h5py
 
 from pyRinex import pyRinex

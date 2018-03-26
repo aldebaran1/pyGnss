@@ -16,7 +16,6 @@ from pandas import read_hdf
 import yaml
 import h5py
 from mpl_toolkits.basemap import Basemap
-from gsit import pyGps
 from pyGnss import pyGnss 
 from pyGnss import gnssUtils
 import timeout_decorator
@@ -180,20 +179,8 @@ def polynom(y, order=3):
     y_new = f(x)
     return y_new
 #------------------------------------------------------------------------------#
-#def correctSampling(t, y, fs=1):
-#    ts = pyGps.datetime2posix(t)
-#    td = np.diff(ts)
-#    idt = np.where(td != fs)[0]
-#    if idt.shape[0] > 0:
-#        while True:
-#            td = np.diff(ts)
-#            idt = np.where(td != fs)[0]
-#            if idt.shape[0] == 0:
-#                break
-#            ts = np.insert(ts, idt[0]+1, ts[idt[0]]+fs)
-#            y = np.insert(y, idt[0]+1, np.NaN)
-#    return ts, y
-@timeout_decorator.timeout(1)
+
+#@timeout_decorator.timeout(1)
 def correctSampling(t,y,Ts=1):
     if isinstance(t[0], datetime.datetime):
         ts = gnssUtils.datetime2posix(t)
@@ -295,8 +282,8 @@ def _alignTimes(tlist, teclist, polylist, residuallist, fs):
     for i in range(len(tlist)):
         tmin.append(tlist[i].min())
         tmax.append(tlist[i].max())
-    tstart = max(pyGps.datetime2posix(tmin))
-    tend = min(pyGps.datetime2posix(tmax))
+    tstart = max(gnssUtils.datetime2posix(tmin))
+    tend = min(gnssUtils.datetime2posix(tmax))
     
     t = []
     tec2 = []
@@ -324,7 +311,7 @@ def getRxList(folder, sufix):
     return rx
 #------------------------------------------------------------------------------#
 def createTimeArray(timelim,Ts=1):
-    ts = pyGps.datetime2posix(timelim)
+    ts = gnssUtils.datetime2posix(timelim)
     t = range(int(ts[0]), int(ts[1])+1)
     t = np.arange(int(ts[0]), int(ts[1])+1, Ts)
     return t
@@ -463,7 +450,8 @@ def RxbiasEstimator(RxBtime=0, TECref=0, t=0, sTEC=0, sat_bias=0, el=[], IPPalt=
 # ---------------------------------------------------------------------------- #
 def returnTEC(data, sv, navfile, yamlfile, timelim=None, el_mask=30, leap_seconds=18, fN=0,
               alt=300, sattype='G', el=False, lla=False, vertical=False, svbias=False, raw=False,
-              rxbias=False, RxB=[]):
+              rxbias=False, RxB=[],
+              svbiasfile='/media/smrak/Eclipse2017/Eclipse/jplg2330.yaml'):
     obstimes = np.array((data.major_axis))
     obstimes = pandas.to_datetime(obstimes) - datetime.timedelta(seconds=leap_seconds)
     stream = yaml.load(open(yamlfile, 'r'))
@@ -490,16 +478,16 @@ def returnTEC(data, sv, navfile, yamlfile, timelim=None, el_mask=30, leap_second
         idel = np.where((aer[1] > el_mask))[0]     
         
         if vertical == False:
-            tec = pyGps.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
+            tec = pyGnss.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
         else:
-            tec = pyGps.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
+            tec = pyGnss.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
             if svbias and not rxbias:
-                bstream = yaml.load(open('/media/smrak/Eclipse2017/Eclipse/jplg2330.yaml', 'r'))
+                bstream = yaml.load(open(svbiasfile, 'r'))
                 sat_bias = float(bstream.get(sv))
                 tec = pyGnss.getVerticalTEC(tec+sat_bias, aer[1][idel], alt)
             if rxbias and svbias:
-                tec = pyGps.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
-                bstream = yaml.load(open('/media/smrak/Eclipse2017/Eclipse/jplg2330.yaml', 'r'))
+                tec = pyGnss.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
+                bstream = yaml.load(open(svbiasfile, 'r'))
                 sat_bias = float(bstream.get(sv))
                 rx_bias = RxbiasEstimator(RxB[0], RxB[1], t[idel], tec, sat_bias, el=aer[1][idel], IPPalt=alt)
                 print (rx_bias)
@@ -525,15 +513,15 @@ def returnTEC(data, sv, navfile, yamlfile, timelim=None, el_mask=30, leap_second
         idel = np.where((aer[1] > el_mask))[0]
 
         if vertical == False:
-            tec = pyGps.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
+            tec = pyGnss.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
         else:
-            tec = pyGps.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
+            tec = pyGnss.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
             if svbias and not rxbias:
                 bstream = yaml.load(open('/media/smrak/Eclipse2017/Eclipse/jplg2330.yaml', 'r'))
                 sat_bias = float(bstream.get(sv))
                 tec = pyGnss.getVerticalTEC(tec+sat_bias, aer[1][idel], alt)
             if rxbias and svbias == False:
-                tec = pyGps.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
+                tec = pyGnss.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
                 bstream = yaml.load(open('/media/smrak/Eclipse2017/Eclipse/jplg2330.yaml', 'r'))
                 sat_bias = float(bstream.get(sv))
                 rx_bias = RxbiasEstimator(RxB[0], RxB[1], t[idel], tec, sat_bias, el=aer[1][idel], IPPalt=350)
