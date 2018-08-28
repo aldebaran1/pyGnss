@@ -64,7 +64,7 @@ def bpf(y, lowcut, highcut, fs=1, order=5, plot=False):
         plt.semilogx(w[1:], gd)
         plt.plot(w[idx], gd[idx], 'xr')
         plt.title('LPF group delay')
-        plt.xlabel('Frequency [radians / second]')
+        plt.xlabel('Frequency [Hz]')
         plt.ylabel('Group delay [samples]')
         plt.margins(0, 0.1)
         plt.grid(which='both', axis='both')
@@ -93,7 +93,7 @@ def hpf(y, fc=0.1, order=5, fs=1,plot=False, group_delay=False):
         plt.figure()
         plt.semilogx(w[1:], gd)
         plt.title('LPF group delay')
-        plt.xlabel('Frequency [radians / second]')
+        plt.xlabel('Frequency [Hz]')
         plt.ylabel('Group delay [samples]')
         plt.margins(0, 0.1)
         plt.grid(which='both', axis='both')
@@ -137,6 +137,21 @@ def datetime2posix(dtime):
     Convert an input list of datetime format timestamp to posix timestamp
     """
     return [i.replace(tzinfo=datetime.timezone.utc).timestamp() for i in dtime]
+# %%
+def getLeapSeconds(navfn):
+    with open(navfn,'r') as f:
+    #find end of header, which has non-constant length
+        while True:
+            line = f.readline()
+            if 'LEAP SECONDS' in line:
+                try:
+                    leap_second = int(line.lstrip().rstrip().split()[0])
+                    return leap_second
+                except Exception as e:
+                    print (e)
+                    break
+                break
+    
 
 # %%
 
