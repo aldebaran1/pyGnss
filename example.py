@@ -137,14 +137,14 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
     leap_seconds = gu.getLeapSeconds(nav)
     obstimes64 = D.time.values
     times = np.array([Timestamp(t).to_pydatetime() for t in obstimes64]) - timedelta(seconds = leap_seconds)
-    #define tlim ie. skip
+    # define tlim ie. skip
     if tlim is not None:
         s = ((times>=tlim[0]) & (times<=tlim[1]))
     else:
         s = np.full(times.shape[0], True, dtype=bool)
         s[:skip] = False
     times = times[s]
-    
+    # Get satellite position
     aer = pyGnss.getSatellitePosition(rx_xyz, sv, times, nav, cs='aer',dtype='georinex')
     # Elevation mask
     idel = aer[1] >= el_mask
@@ -225,19 +225,27 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
                     _plot(times, vTEC, title=arg)
     return Y
 
-def returnHT(x, fs=1):
-    from scipy.signal import hilbert
-    analytic_signal = hilbert(x)
-    amplitude_envelope = np.abs(analytic_signal)
-    instantaneous_phase = np.unwrap(np.angle(analytic_signal))
-    instantaneous_frequency = (np.diff(instantaneous_phase) /
-                               (2.0*np.pi) * fs)
-    return amplitude_envelope, instantaneous_phase, instantaneous_frequency
-
-def mahali(fnc,fnav,sv='G09',args = ['C1', 'L1', 'S1', 'L5', 'vTEC'],tlim=None):
-    
+def mahali(folder = 'E:\\mahali\\',day=280,rx=9,sv='G09',
+           args = ['C1', 'L1', 'S1', 'L5', 'vTEC'],tlim=None):
+    # Init
+    date = datetime.strptime(str(2015)+str(day), '%Y%j')
+    directory = date.strftime('%Y-%m-%d')
+    rxmah = {'2': 'mah2'+str(day)+'0.15o.nc',
+             '3': 'mah3'+str(day)+'0.15o.nc',
+             '4': 'mah4'+str(day)+'0.15o.nc',
+             '5': 'mah5'+str(day)+'0.15o.nc',
+             '6': 'mah6'+str(day)+'0.15o.nc',
+             '7': 'mah7'+str(day)+'0.15o.nc',
+             '8': 'mah8'+str(day)+'0.15o.nc',
+             '9': 'mah9'+str(day)+'0.15o.nc',
+             '13': 'ma13'+str(day)+'0.15o.nc',}
+    folder = 'E:\\mahali\\' + directory + '\\'
+    nc = rxmah[str(rx)]
+    nav = 'brdc'+str(day)+'0.15n'
+    fnc = folder + nc
+    fnav = folder + nav
     # Obs
-    data = singleRx(fnc, fnav, args=args, sv=sv,
+    data = pyGnss.singleRx(fnc, fnav, args=args, sv=sv,
                     porder=12, forder=5,fc=0.1,tlim=tlim,
                     s4=False, rawplot=False,tec_ch=2,
                     indicator=False,polyfit=True)
@@ -246,34 +254,34 @@ def mahali(fnc,fnav,sv='G09',args = ['C1', 'L1', 'S1', 'L5', 'vTEC'],tlim=None):
     return data, dt
 
 save = 'C:\\Users\\smrak\\Google Drive\\BU\\Projects\\imprint\\figures\\raw\\'
-#save = ''
-ft = 'MOAT_glitch_L1C1'
+save = ''
+#ft = 'MOAT_glitch_L1C1'
 #ft = 'mag6_phase_scint'
 #tlim = [datetime(2015,10,7,6,10,0), datetime(2015,10,7,6,45,0)]
 #tlim = [datetime(2017,8,21,15,0,0), datetime(2017,8,21,22,0,0)]
 tlim = None
-folder = 'E:\\mahali\\2015-10-07\\'
-nc = 'nc\\mah92800.15o.nc'
-nav = 'brdc2800.15n'
+#folder = 'E:\\mahali\\2015-10-07\\'
+#nc = 'nc\\mah92800.15o.nc'
+#nav = 'brdc2800.15n'
 # MO
-folder = 'E:\\mo\\'
-nc = 'MOJC2330.17o.nc' #MOAT
-nav= 'MOJC2330.17n'
-nc = 'MOAT2330.17o.nc'
+#folder = 'E:\\mo\\'
+#nc = 'MOJC2330.17o.nc' #MOAT
+#nav= 'MOJC2330.17n'
+#nc = 'MOAT2330.17o.nc'
 # Ublox
 #folder = 'E:\\ublox\\'
 #nc = 'ub_homet3.18o.nc'
 #nav= 'brdc2420.18n'
-fnc = folder + nc
-fnav = folder + nav
-data, dt = mahali(fnc=fnc,fnav=fnav,sv='G12',args=['C1', 'L1', 'vTEC'], tlim=tlim)
+#fnc = folder + nc
+#fnav = folder + nav
+data, dt = mahali(rx=9,day=280,sv='G23',args=['C1', 'L1', 'S1', 'vTEC'], tlim=tlim)
 
-#xlim = [datetime(2015,10,7,6,10,0), datetime(2015,10,7,6,35,0)]
-xlim = [datetime(2017,8,21,17,10,0), datetime(2017,8,21,18,0,0)]
+xlim = [datetime(2015,10,7,6,10,0), datetime(2015,10,7,6,35,0)]
+#xlim = [datetime(2017,8,21,17,10,0), datetime(2017,8,21,18,0,0)]
 ylim = [-3.14*8, 3.14*15]
 ylim = [-3.14, 3.14]
 y = 2*np.pi*data['sp']
-title = nc
+#title = nc
 ylabel = 'Scint [rad]'
 _plotOneParam(dt,y,c='b',title=title,xlim=xlim,ylabel=ylabel,
               ylim=ylim,ygrid=True,formatter='%H:%M')
@@ -296,10 +304,10 @@ ylabel = 'sfTEC'
 _plotOneParam(dt, sfTEC, ylabel=ylabel,xlim=xlim,ygrid=True,formatter='%H:%M')
 #
 #title= 'Hilbert'
-envelope, phi, freq = returnHT(y)
+#envelope, phi, freq = returnHT(y)
 #_plotHilbert(dt,y,envelope,phi,frequency=abs(freq), xlim=xlim, title=title,formatter='%H:%M')
 #
-title = nc
+#title = nc
 ylabel1 = 'L1-pL1fit = dL1 [rad]'
 ylabel2 = 'L1scint [rad]'
 xlabel = 'Time [UTC]'
@@ -335,15 +343,15 @@ y2 = data['L1polyfit']
 y1 = data['C1polyfit']
 ylabel1 = 'C1 [cycle]'
 ylabel2 = 'L1 [cycle]'
-ylim1 = [np.nanmin(y1)+0.1*np.nanmin(y1), np.nanmax(y1)+0.1*np.nanmax(y1)]
+ylim1 = [np.nanmin(y2)+0.1*np.nanmin(y2), np.nanmax(y2)+0.1*np.nanmax(y2)]
 ylim2=ylim1
 f = _plotDuo(dt,y1,y2,xlim=xlim,ylim1=ylim1,ylim2=ylim2,
          title=title,xlabel=xlabel,ylabel1=ylabel1,ylabel2=ylabel2,
          c1='r',c2='b',formatter='%H:%M',lw1=1,lw2=2)
 ###############################################################################
-if save is not None and save is not '':
-    save = save + ft + '.png'
-    f.savefig(save, dpi=300)
+#if save is not None and save is not '':
+#    save = save + ft + '.png'
+#    f.savefig(save, dpi=300)
 ###############################################################################
     
 #C1hpf = gu.hpf(f1 / c0 * data['C1polyfit'], order=5,fc=0.01,plot=False,fs=1)

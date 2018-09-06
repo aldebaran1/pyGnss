@@ -5,7 +5,6 @@ Created on Fri Jun 30 14:49:04 2017
 
 @author: Sebastijan Mrak <smrak@gmail.com>
 """
-
 import numpy as np
 from scipy import signal
 import datetime
@@ -43,7 +42,7 @@ def bpf(y, lowcut, highcut, fs=1, order=5, plot=False):
     nyq = 0.5 * fs
     low = lowcut / nyq
     high = highcut / nyq
-    mid = ((highcut - lowcut)/3)*2 / nyq
+#    mid = ((highcut - lowcut)/3)*2 / nyq
     b, a = signal.butter(order, [low, high], btype='band')
     w, h = signal.freqz(b, a, worN=1000)
     gd = -np.diff(np.unwrap(np.angle(h)))/np.diff(w)
@@ -146,18 +145,31 @@ def getLeapSeconds(navfn):
             if 'LEAP SECONDS' in line:
                 try:
                     leap_second = int(line.lstrip().rstrip().split()[0])
+                    # Return
                     return leap_second
                 except Exception as e:
                     print (e)
                     break
                 break
             if 'END' in line:
+                # Return null
                 return 0
                 break
-    
 
 # %%
+def hilbertTransform(x, fs=1):
+    """
+    Return Analytic signal (envelope), phase and frequency from the Hilber Transform
+    """
+    from scipy.signal import hilbert
+    analytic_signal = hilbert(x)
+    amplitude_envelope = np.abs(analytic_signal)
+    instantaneous_phase = np.unwrap(np.angle(analytic_signal))
+    instantaneous_frequency = (np.diff(instantaneous_phase) /
+                               (2.0*np.pi) * fs)
+    return amplitude_envelope, instantaneous_phase, instantaneous_frequency
 
+# %%
 def cycleSlipDetect(y, cslim=50, csmargin=0.05):
     """
     Cycle slip detection amgorithm that uses a 3rd order difference methodology to

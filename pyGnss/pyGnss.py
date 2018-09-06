@@ -10,7 +10,10 @@ from scipy import interpolate
 from pandas import DataFrame
 from pymap3d import ecef2geodetic,ecef2aer,aer2geodetic
 import h5py
-
+import xarray
+import datetime
+import matplotlib.pyplot as plt
+from pandas import Timestamp
 from pyRinex import pyRinex
 import georinex as gr
 from pyGnss import gnssUtils as uf
@@ -242,7 +245,6 @@ def AmplitudeScintillationIndex(data, N):
     return y
 
 #%% Sat positioning 
-
 def getSatellitePosition(rx_xyz,sv,obstimes,navfn,cs='wsg84', navdict=False,
                          dtype='pyrinex'):
     """
@@ -328,14 +330,14 @@ def getIonosphericPiercingPoints(rx_xyz,sv,obstimes,ipp_alt, navfn,cs='wsg84',sa
         return aer_vector
     else:
         print ('Enter either "wsg84" or "aer" as coordinate system. "wsg84" is default one.')
-
+# %%
 def getMappingFunction(el, h):
     
     Re = 6371.0
     rc1 = (Re / (Re + h))
     F = np.cos(np.arcsin(rc1*np.cos(np.radians(el))))
     return np.array(F)
-
+# %%
 def getSatXYZ(nav, sv, times):
     """
     Greg Starr
@@ -617,3 +619,108 @@ def getGpsTime(dt):
     total += dt.second
     return(total)
 
+# %%
+def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
+             sp=True,s4=False,polyfit=False,indicator=False,
+             alt=300,el_mask=30,skip=20,porder=8,tec_ch=2,
+             forder=5,fc=0.1,fs=1):
+    
+    def _plot(x,y,title=''):
+        plt.figure()
+        plt.title(title)
+        plt.plot(x,y,'b')
+    
+    D = xarray.open_dataset(obs, group='OBS')
+    rx_xyz = D.position
+    leap_seconds = uf.getLeapSeconds(nav)
+    obstimes64 = D.time.values
+    times = np.array([Timestamp(t).to_pydatetime() for t in obstimes64]) - \
+                        datetime.timedelta(seconds = leap_seconds)
+    # define tlim ie. skip
+    if tlim is not None:
+        s = ((times>=tlim[0]) & (times<=tlim[1]))
+    else:
+        s = np.full(times.shape[0], True, dtype=bool)
+        s[:skip] = False
+    times = times[s]
+    # Get satellite position
+    aer = getSatellitePosition(rx_xyz, sv, times, nav, cs='aer',dtype='georinex')
+    # Elevation mask
+    idel = aer[1] >= el_mask
+    times = times[idel]
+    # times to output dict: Y
+    Y = {'times': times}
+    Y['rx_xyz'] = rx_xyz
+    Y['az'] = aer[0][idel]
+    Y['el'] = aer[1][idel]
+    for arg in args:
+        if not arg[1:] == 'TEC':
+            X = D.sel(sv=sv)[arg].values[s][idel]
+            # To dict
+            Y[arg] = X
+            # Indicators?
+            if indicator:
+                try:
+                    if arg[0] == 'L' and arg[-1] != '5':
+                        argi = arg + 'lli'
+                    elif arg[0] == 'C' or arg[0] == 'P' or arg == 'L5':
+                        argi = arg + 'ssi'
+                    else:
+                        argi = ''
+                    Xi = D.sel(sv=sv)[argi].values[s:][idel]
+                    Y[argi] = Xi
+                except Exception as e:
+                    print (e)
+            if rawplot:
+                _plot(times,X,arg)
+        if arg[0] == 'L' or arg[0] == 'C':
+            if arg == 'C1':
+                X = X * f1 / c0 # To cycles
+            Xd = phaseDetrend(X, order=porder)
+                
+            if polyfit:
+                # To dict
+                Y[arg+'polyfit'] = Xd
+            if rawplot:
+                if rawplot:
+                    _plot(times,Xd,arg+'_detrend_poly')
+            if sp:
+                Xy = uf.hpf(Xd, order=forder,fc=fc,plot=False,fs=fs)
+                # To dict
+                Y['sp'] = Xy
+                if rawplot:
+                    _plot(times[100:],Xy[100:],arg+'_scint')
+        if arg[0] == 'S':
+            if s4:
+                Xy = AmplitudeScintillationIndex(X,60)
+                # To dict
+                Y['s4'] = Xy
+                if rawplot:
+                    _plot(times,Xy,arg+'_S4')
+                    
+        if arg[1:] == 'TEC':
+            if tec_ch == 2:
+                C1 = D.sel(sv=sv)['C1'].values[s][idel]
+                L1 = D.sel(sv=sv)['L1'].values[s][idel]
+                C2 = D.sel(sv=sv)['P2'].values[s][idel]
+                L2 = D.sel(sv=sv)['L2'].values[s][idel]
+            elif tec_ch == 5:
+                C1 = D.sel(sv=sv)['C1'].values[s][idel]
+                L1 = D.sel(sv=sv)['L1'].values[s][idel]
+                C2 = D.sel(sv=sv)['C5'].values[s][idel]
+                L2 = D.sel(sv=sv)['L5'].values[s][idel]
+            sTEC = getPhaseCorrTEC(L1, L2, C1, C2,channel=tec_ch)
+            sTEC = sTEC - np.nanmin(sTEC)
+            if arg == 'sTEC':
+                # To dict
+                Y[arg] = sTEC
+                if rawplot:
+                    _plot(times, sTEC,title=arg)
+            elif arg == 'vTEC':
+                vTEC = getVerticalTEC(sTEC,aer[1][idel],alt)
+                # To dict
+                Y[arg] = vTEC
+                if rawplot:
+                    _plot(times, vTEC, title=arg)
+    # return dict with data/args
+    return Y
