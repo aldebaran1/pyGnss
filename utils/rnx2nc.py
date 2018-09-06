@@ -14,7 +14,7 @@ import georinex as gr
 def _convert(file, odir, i):
     print ('Converting file: ', file)
     try:
-        gr.load(file,ofn=odir, useindicators=i)
+        gr.load(file,out=odir, useindicators=i)
     except Exception as e:
         print (e)
     sleep(0.1)
@@ -54,6 +54,8 @@ def convertObs2HDF(folder=None, sufix=None, odir=None, override=False,i=False):
         if odir is None:
             odir = folder
         if folder[-1] == 'o' or folder[-1] == 'O': # Very stupid / change to match OBS file template
+            head, tail = os.path.split(folder)
+            odir = head
             file = folder
             _iterate(file, odir, override, i)
         else:

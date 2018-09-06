@@ -151,6 +151,9 @@ def getLeapSeconds(navfn):
                     print (e)
                     break
                 break
+            if 'END' in line:
+                return 0
+                break
     
 
 # %%

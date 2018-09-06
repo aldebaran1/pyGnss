@@ -71,7 +71,7 @@ def getPSlantTEC(L1, L2, units = 'cycle'):
         
     return sTEC
 
-def getPhaseCorrTEC(L1, L2, P1, P2, satbias=None, tec_err=False, 
+def getPhaseCorrTEC(L1, L2, P1, P2, satbias=None, tec_err=False, channel=2,
                     intervals=None, fN = None, maxgap=3, maxjump=2):
     """
     Greg Starr
@@ -83,6 +83,8 @@ def getPhaseCorrTEC(L1, L2, P1, P2, satbias=None, tec_err=False,
     cycle slips. If the length of consequitive interval is 1, then NaN is inserted
     at this place.    
     """
+    #
+    global f1, f2, f5
     #Get intervals between nans and/or cycle slips    
     idx, ranges = getIntervals(L1, L2, P1, P2, maxgap=maxgap, maxjump=maxjump)
 #    print ('Intervals between cycle slips ', ranges)
@@ -90,14 +92,17 @@ def getPhaseCorrTEC(L1, L2, P1, P2, satbias=None, tec_err=False,
     TEC = np.nan * np.zeros(len(L1))
     for r in ranges:
         if (r[1] - r[0]) > 1:
-            if fN is None:
-                f1 = 1575420000
-                f2 = 1227600000
-                range_tec = ((f1**2 * f2**2) / (f1**2 - f2**2)) * (P2[r[0] : r[1]] - 
+            if fN is None: # GPS
+                F1 = f1
+                if channel == 2:
+                    F2 = f2
+                elif channel == 5:
+                    F2 = f5
+                range_tec = ((F1**2 * F2**2) / (F1**2 - F2**2)) * (P2[r[0] : r[1]] - 
                                           P1[r[0] : r[1]]) /40.3 / pow(10, 16)
-                phase_tec = ((f1**2 * f2**2) / (f1**2 - f2**2)) * (c0/40.3) * \
-                         (L1[r[0] : r[1]] / f1 - L2[r[0] : r[1]] / f2) / pow(10, 16)
-            else: 
+                phase_tec = ((F1**2 * F2**2) / (F1**2 - F2**2)) * (c0/40.3) * \
+                         (L1[r[0] : r[1]] / F1 - L2[r[0] : r[1]] / F2) / pow(10, 16)
+            else: # GLONASS
                 f1 = (1602 + fN*0.5625) * 1000000
                 f2 = (1246 + fN*0.4375) * 1000000
                 range_tec = ((f1**2 * f2**2) / (f1**2 - f2**2)) * (P2[r[0] : r[1]] - 
@@ -170,6 +175,37 @@ def getVerticalTEC(tec, el, h, Fout=False):
         return np.array(vTEC), np.array(F)
     else:
         return np.array(vTEC)
+    
+def singleFrequencyTEC(L1, C1, units='m', 
+                       vertical:bool = False, 
+                       el: np.ndarray = np.array([]), 
+                       alt:int = 300):
+    # L1 [cycle]: Convert C1 units to [cycles]
+    if units == 'm':
+        C1cycle = C1 * f1 / c0
+    elif units == 'cycle':
+        C1cycle = C1
+    elif units == 'rad':
+        C1cycle = C1 * f1 / c0 / (2*np.pi)
+    else:
+        raise ('Enter appropriate units "m", "rad", or "cycle"')
+    dN = np.nanmean(L1 - C1cycle)
+    L1corr = L1 - dN
+    TECrad = C1cycle-L1corr
+    if vertical:
+        if el.shape[0] == L1.shape[0]:
+            Fmap = getMappingFunction(el,alt)
+            TECrad = TECrad * Fmap
+    return TECrad
+
+def retreiveDTECfromPhase(L, f=f1, units='cycle'):
+    if units == 'cycle':
+        dTEC = L * f**2 / 40.3 / 1E16
+    elif units == 'rad':
+        dTEC = L * c0 * f / 2 / np.pi / 40.3 /1e16
+    else:
+        raise ('Enter an appropriate name for units')
+    return dTEC * -1
 #%% Indexes
 def getROTI(tec, length):
     """

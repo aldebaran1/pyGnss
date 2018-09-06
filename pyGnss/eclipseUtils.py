@@ -15,10 +15,9 @@ import pandas
 from pandas import read_hdf
 import yaml
 import h5py
-from mpl_toolkits.basemap import Basemap
+#from mpl_toolkits.basemap import Basemap
 from pyGnss import pyGnss 
 from pyGnss import gnssUtils
-import timeout_decorator
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
@@ -159,18 +158,6 @@ def interpolateTEC(t,y,Ts=30, order=10):
     y1[mask] = y_fit[mask]
     return t1, y1
 
-#def interpolateTEC(t,tec,order=10,maxjump=2):
-#    idf = np.where(np.isfinite(tec))[0]
-#    if np.diff(tec[idf]).max() <= maxjump:
-#        x = np.arange(0,tec.shape[0])
-#        z = np.polyfit(x[np.isfinite(tec)], tec[np.isfinite(tec)], order)
-#        f = np.poly1d(z)
-#        y = f(x)
-#        mask = np.where(np.isnan(tec))[0]
-#        tec[mask] = y[mask]
-##    print (np.diff(mask))
-#    return tec
-
 #------------------------------------------------------------------------------#
 def polynom(y, order=3):
     x = range(y.shape[0])
@@ -180,7 +167,6 @@ def polynom(y, order=3):
     return y_new
 #------------------------------------------------------------------------------#
 
-#@timeout_decorator.timeout(1)
 def correctSampling(t,y,Ts=1):
     if isinstance(t[0], datetime.datetime):
         ts = gnssUtils.datetime2posix(t)
@@ -659,33 +645,33 @@ def _plotLOS(tlist, teclist, polylist, residuallist, rx='', sv=0, save=False,
     else:
         plt.show()
 #------------------------------------------------------------------------------#
-def _plotEclipseMap(filepath='totality.h5'):
-    data = h5py.File(filepath, 'r')
-    center_lat = np.array(data['path/center_lat'])
-    center_lon = np.array(data['path/center_lon'])
-    north_lat = np.array(data['path/north_lat'])
-    north_lon = np.array(data['path/north_lon'])
-    south_lat = np.array(data['path/south_lat'])
-    south_lon = np.array(data['path/south_lon'])
-    
-    (fig,ax) = plt.subplots(1,1,figsize=(16,12),facecolor='w')
-    latlim2 = [33, 38]
-    lonlim2 = [-95, -75]
-    m = Basemap(projection='merc',
-    llcrnrlat=latlim2[0],urcrnrlat=latlim2[1],\
-    llcrnrlon=lonlim2[0],urcrnrlon=lonlim2[1],\
-    resolution='c')
-    m.drawcoastlines()
-    m.drawstates()
-    m.drawcountries()
-    
-    X,Y = m(center_lon, center_lat)
-    X1,Y1 = m(north_lon, north_lat)
-    X2,Y2 = m(south_lon, south_lat)
-    m.plot(X,Y, c='r')
-    m.plot(X1,Y1, c='b')
-    m.plot(X2,Y2, c='b')
-    plt.show()
+#def _plotEclipseMap(filepath='totality.h5'):
+#    data = h5py.File(filepath, 'r')
+#    center_lat = np.array(data['path/center_lat'])
+#    center_lon = np.array(data['path/center_lon'])
+#    north_lat = np.array(data['path/north_lat'])
+#    north_lon = np.array(data['path/north_lon'])
+#    south_lat = np.array(data['path/south_lat'])
+#    south_lon = np.array(data['path/south_lon'])
+#    
+#    (fig,ax) = plt.subplots(1,1,figsize=(16,12),facecolor='w')
+#    latlim2 = [33, 38]
+#    lonlim2 = [-95, -75]
+#    m = Basemap(projection='merc',
+#    llcrnrlat=latlim2[0],urcrnrlat=latlim2[1],\
+#    llcrnrlon=lonlim2[0],urcrnrlon=lonlim2[1],\
+#    resolution='c')
+#    m.drawcoastlines()
+#    m.drawstates()
+#    m.drawcountries()
+#    
+#    X,Y = m(center_lon, center_lat)
+#    X1,Y1 = m(north_lon, north_lat)
+#    X2,Y2 = m(south_lon, south_lat)
+#    m.plot(X,Y, c='r')
+#    m.plot(X1,Y1, c='b')
+#    m.plot(X2,Y2, c='b')
+#    plt.show()
 #------------------------------------------------------------------------------#
 def _plotDetrending(t, z, sv='',rx=None,order=[],save=False,fig_path=None, 
                     pltlim = [datetime.datetime(2017,8,21,17,0,0), datetime.datetime(2017,8,21,21,0,0)]):
