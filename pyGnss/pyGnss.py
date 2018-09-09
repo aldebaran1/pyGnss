@@ -263,10 +263,13 @@ def getSatellitePosition(rx_xyz,sv,obstimes,navfn,cs='wsg84', navdict=False,
         xyz = getSatXYZ2(navdata, obstimes)
     az, el, r = ecef2aer(xyz[:,0],xyz[:,1],xyz[:,2],rec_lat, rec_lon, rec_alt)
     lat, lon, alt = ecef2geodetic(xyz[:,0],xyz[:,1],xyz[:,2])
+    
     if cs == 'wsg84':
         return [lat, lon, alt]
     elif cs == 'aer':
         return [az, el, r]
+    elif cs == 'xyz':
+        return [xyz[:,0], xyz[:,1], xyz[:,2]]
     else:
         print ('Wrong frame of reference. Type "wsg84" or "aer".')
         return 0;
