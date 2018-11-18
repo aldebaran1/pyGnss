@@ -244,6 +244,66 @@ def AmplitudeScintillationIndex(data, N):
         y[i] = np.std(data[i:i+N] / np.mean(data[i:i+N]))
     return y
 
+def gpsSatPosition(fnav, dt, sv=None, rx_position=None, coords='xyz'):
+    navdata = gr.load(fnav).sel(sv=sv)
+    timesarray = np.asarray(dt,dtype='datetime64[ns]') #[datetime64 [ns]]
+    # Manipulate with times, epochs and crap like this
+    navtimes = navdata.time.values # [datetime64 [ns]]
+    idnan = np.isfinite(navdata['Toe'].values)
+    navtimes = navtimes[idnan]
+    bestephind = []
+    for t in timesarray:
+        idt = abs(navtimes - t).argmin() if t>navtimes[abs(navtimes - t).argmin()] else abs(navtimes - t).argmin()-1
+        bestephind.append(idt)
+#    bestephind = np.array([np.argmin(abs(navtimes-t)) for t in timesarray])
+    gpstime = np.array([getGpsTime(t) for t in dt])
+    t = gpstime - navdata['Toe'][idnan][bestephind].values # [datetime.datetime]
+    # constants
+    GM = 3986005.0E8 # universal gravational constant
+    OeDOT = 7.2921151467E-5
+    # Elements
+    ecc = navdata['Eccentricity'][idnan][bestephind].values # Eccentricity
+    Mk = navdata['M0'][idnan][bestephind].values + \
+         t *(np.sqrt(GM / navdata['sqrtA'][idnan][bestephind].values**6) + 
+             navdata['DeltaN'][idnan][bestephind].values)
+    Ek = solveIter(Mk,ecc)
+    Vk = np.arctan2(np.sqrt(1.0 - ecc**2) * np.sin(Ek), np.cos(Ek) - ecc)
+    PhiK = Vk + navdata['omega'][idnan][bestephind].values
+    # Perturbations
+    delta_uk = navdata['Cuc'][idnan][bestephind].values * np.cos(2.0*PhiK) + \
+              navdata['Cus'][idnan][bestephind].values * np.sin(2.0*PhiK)
+    Uk = PhiK + delta_uk
+    
+    delta_rk = navdata['Crc'][idnan][bestephind].values * np.cos(2.0*PhiK) + \
+               navdata['Crs'][idnan][bestephind].values * np.sin(2.0*PhiK)
+    Rk = navdata['sqrtA'][idnan][bestephind].values**2 * (1.0 - ecc * np.cos(Ek)) + delta_rk
+    
+    delta_ik = navdata['Cic'][idnan][bestephind].values * np.cos(2.0*PhiK) + \
+               navdata['Cis'][idnan][bestephind].values * np.sin(2.0*PhiK)
+    Ik = navdata['Io'][idnan][bestephind].values + \
+         navdata['IDOT'][idnan][bestephind].values * t + delta_ik
+    
+    #Compute the right ascension
+    Omegak = navdata['Omega0'][idnan][bestephind].values + \
+             (navdata['OmegaDot'][idnan][bestephind].values - OeDOT) * t - \
+             (OeDOT * navdata['Toe'][idnan][bestephind].values)
+             
+    #X,Y coordinate corrections
+    Xkprime = Rk * np.cos(Uk)
+    Ykprime = Rk * np.sin(Uk)
+    # ECEF XYZ
+    X = Xkprime * np.cos(Omegak) - (Ykprime * np.sin(Omegak) * np.cos(Ik))
+    Y = Xkprime * np.sin(Omegak) + (Ykprime * np.cos(Omegak) * np.cos(Ik))
+    Z = Ykprime * np.sin(Ik)
+    
+    if coords == 'xyz':
+        return np.array([X,Y,Z])
+    elif coords == 'aer':
+        assert rx_position is not None
+        rec_lat, rec_lon, rec_alt = ecef2geodetic(rx_position[0], rx_position[1], rx_position[2])
+        A,E,R = ecef2aer(X, Y, Z, rec_lat, rec_lon, rec_alt)
+        return np.array([A,E,R])
+
 #%% Sat positioning 
 def getSatellitePosition(rx_xyz,sv,obstimes,navfn,cs='wsg84', navdict=False,
                          dtype='pyrinex'):
@@ -727,3 +787,19 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
                     _plot(times, vTEC, title=arg)
     # return dict with data/args
     return Y
+
+def dataFromNC(fnc,fnav,sv,
+               el_mask=30,tlim=None):
+    leap_seconds = uf.getLeapSeconds(fnav)
+    D = gr.load(fnc, useindicators=True).sel(sv=sv)
+    if tlim is not None:
+        if len(tlim) == 2:
+            D = D.where(np.logical_and(D.time >= np.datetime64(tlim[0]), D.time <= np.datetime64(tlim[1])), drop=True)
+    obstimes64 = D.time.values
+    dt = np.array([Timestamp(t).to_pydatetime() for t in obstimes64]) - \
+               datetime.timedelta(seconds = leap_seconds)
+    rx_xyz = D.position
+    aer = gpsSatPosition(fnav,dt,sv=sv, rx_position=rx_xyz, coords='aer')
+    idel = (aer[1] >= el_mask)
+    dt = dt[idel]
+    return dt, D, idel
