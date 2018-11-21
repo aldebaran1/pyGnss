@@ -428,7 +428,7 @@ def getSatXYZ(nav, sv, times):
     t = info['gpstime']-info['TimeEph']
     mu = info['M0']+t*(np.sqrt(GM/info['sqrtA']**6)+info['DeltaN'])
     Ek = solveIter(mu,info['Eccentricity'])  
-    Vk = np.asarray(np.arctan2(np.sqrt(1.0-info['Eccentricity'])*np.sin(Ek),
+    Vk = np.asarray(np.arctan2(np.sqrt(1.0-info['Eccentricity']**2)*np.sin(Ek),
                                np.cos(Ek)-info['Eccentricity']),float)
     PhiK = Vk + info['omega']
     #Correct for orbital perturbations
@@ -511,7 +511,7 @@ def getSatXYZ2(info, times):
              t *(np.sqrt(GM / info['sqrtA'][idnan][bestephind].values**6) + 
              info['DeltaN'][idnan][bestephind].values)
     Ek = solveIter(mu,ecc)
-    Vk = np.asarray(np.arctan2(np.sqrt(1.0 - ecc) * np.sin(Ek),
+    Vk = np.asarray(np.arctan2(np.sqrt(1.0 - ecc**2) * np.sin(Ek),
                                np.cos(Ek) - ecc), float)
     PhiK = Vk + info['omega'][idnan][bestephind].values
     
@@ -579,7 +579,9 @@ def phaseDetrend(y, order,polynom=False):
     Detrended output is input data subtracted with polinom approximation.
     Output is of the same length as input data 'y'. 
     """
-    x = range(y.shape[0])
+    x = np.arange(y.shape[0])
+    mask = np.isnan(y)
+    z = np.polyfit(x[~mask], y[~mask], order)
     z = np.polyfit(x, y, order)
     f = np.poly1d(z)
     polyfit = f(x)

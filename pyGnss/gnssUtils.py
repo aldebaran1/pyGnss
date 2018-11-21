@@ -162,13 +162,27 @@ def hilbertTransform(x, fs=1):
     Return Analytic signal (envelope), phase and frequency from the Hilber Transform
     """
     from scipy.signal import hilbert
+    if np.nansum(np.isnan(x)) > 0:
+        y = np.nan * np.copy(x)
+        mask = np.isfinite(x)
+        x = x[mask]
     analytic_signal = hilbert(x)
     amplitude_envelope = np.abs(analytic_signal)
     instantaneous_phase = np.unwrap(np.angle(analytic_signal))
     instantaneous_frequency = (np.diff(instantaneous_phase) /
                                (2.0*np.pi) * fs)
-    return amplitude_envelope, instantaneous_phase, instantaneous_frequency
-
+    if 'y' in locals():
+        amp = np.copy(y)
+        amp[mask] = amplitude_envelope
+        phase = np.copy(y)
+        phase[mask] = instantaneous_phase
+        frequency = np.copy(y)
+        mask[0] = False
+        frequency[mask] = instantaneous_frequency
+        return amp, phase, frequency
+    else:
+        return amplitude_envelope, instantaneous_phase, instantaneous_frequency
+    
 # %%
 def cycleSlipDetect(y, cslim=50, csmargin=0.05):
     """
