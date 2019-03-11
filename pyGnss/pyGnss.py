@@ -24,6 +24,7 @@ f1 = 1575420000
 f2 = 1227600000
 f5 = 1176450000
 c0 = 299792458
+freq = {'1': f1, '2': f2, '5': f5}
 
 def getSatBias(fn):
     import os
@@ -97,6 +98,15 @@ def getPSlantTEC(L1, L2, units = 'cycle'):
                 (pow(f2, 2) - pow(f1, 2))) * (L1 - L2)) / pow(10,16)
         
     return sTEC
+
+def slantTEC(C1, C2, L1, L2, frequency = 2):
+    global freq, c0
+    F = (freq['1']**2 * freq[str(frequency)]**2) / (freq['1']**2 - freq[str(frequency)]**2)
+    rangetec = F / 40.3 * (C2 - C1) / 1e16
+    phasetec = F / 40.3 * c0 * (L1/freq['1'] - L2/freq[str(frequency)]) / 1e16
+    N = np.nanmedian(rangetec - phasetec)
+    
+    return phasetec + N
 
 def getPhaseCorrTEC(L1, L2, P1, P2, satbias=None, tec_err=False, channel=2,
                     intervals=None, fN = None, maxgap=3, maxjump=2):
@@ -424,7 +434,8 @@ def getMappingFunction(el, h):
     
     Re = 6371.0
     rc1 = (Re / (Re + h))
-    F = np.cos(np.arcsin(rc1*np.cos(np.radians(el))))
+#    F = np.cos(np.arcsin(rc1*np.cos(np.radians(el))))
+    F = np.sqrt(1 - (np.cos(np.radians(el))**2 * rc1**2))
     return np.array(F)
 # %%
 def getSatXYZ(nav, sv, times):
@@ -598,25 +609,25 @@ def getSatXYZ2(info, times):
         
     return xyz
 #%% Phase scintillation
-def phaseDetrend(y, order,polynom=False):
-    """
-    Sebastijan Mrak
-    Raw phase data detrending using N-th polinom approximation function.
-    Detrended output is input data subtracted with polinom approximation.
-    Output is of the same length as input data 'y'. 
-    """
-    x = np.arange(y.shape[0])
-    mask = np.isnan(y)
-    z = np.polyfit(x[~mask], y[~mask], order)
-    z = np.polyfit(x, y, order)
-    f = np.poly1d(z)
-    polyfit = f(x)
-    y_d = y-polyfit
-    
-    if polynom:
-        return y_d, polyfit
-    else:
-        return y_d
+#def phaseDetrend(y, order,polynom=False):
+#    """
+#    Sebastijan Mrak
+#    Raw phase data detrending using N-th polinom approximation function.
+#    Detrended output is input data subtracted with polinom approximation.
+#    Output is of the same length as input data 'y'. 
+#    """
+#    x = np.arange(y.shape[0])
+#    mask = np.isnan(y)
+#    z = np.polyfit(x[~mask], y[~mask], order)
+#    z = np.polyfit(x, y, order)
+#    f = np.poly1d(z)
+#    polyfit = f(x)
+#    y_d = y-polyfit
+#    
+#    if polynom:
+#        return y_d, polyfit
+#    else:
+#        return y_d
 
 
 def phaseScintillation(data, fc=0.1, filt_order=6, polyfit_order=3, fs=1, skip=20):
@@ -735,7 +746,7 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
         s[:skip] = False
     times = times[s]
     # Get satellite position
-    aer = getSatellitePosition(rx_xyz, sv, times, nav, cs='aer',dtype='georinex')
+    aer = gpsSatPosition(nav, times, sv=sv, rx_position=rx_xyz, coords='aer')
     # Elevation mask
     idel = aer[1] >= el_mask
     times = times[idel]
@@ -833,7 +844,7 @@ def dataFromNC(fnc,fnav,sv,
     aer = gpsSatPosition(fnav,dt,sv=sv, rx_position=rx_xyz, coords='aer')
     idel = (aer[1] >= el_mask)
     aer = aer[:, idel]
-    dt = dt[idel]
+    D['time'] = dt
     if satpos:
         D['az'] = aer[0]
         D['el'] = aer[1]
@@ -850,4 +861,24 @@ def dataFromNC(fnc,fnav,sv,
         D['ipp_lon'] = lla_vector[1]
         D['ipp_lat'] = lla_vector[0]
         D['ipp_alt'] = ipp_alt
-    return dt, D, idel
+    return D, idel
+
+def processTEC(obs, sv, frequency = 2, H=None,elevation=None):
+    stec = slantTEC(obs['C1'], obs['P2'], 
+                           obs['L1'], obs['L2'], frequency = frequency)
+#    stec += satbias[sv]
+    assert elevation is not None
+    assert H is not None
+    F = getMappingFunction(elevation, h = H)
+    vtec = stec * F
+    tecd = uf.phaseDetrend(vtec, order=12)
+    x = np.arange(tecd.shape[0])
+    mask= np.isnan(tecd)
+    tecdp = np.copy(tecd)
+    tecdp[:15] = np.nan
+    tecdp[mask] = np.interp(x[mask], x[~mask], tecd[~mask])
+    tecps = uf.hpf(tecdp)
+    tecps[:15] = np.nan
+    
+    return vtec, tecdp, tecps
+    

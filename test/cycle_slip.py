@@ -404,7 +404,7 @@ def slantTEC(C1, C2, L1, L2, frequency = 2):
     return phasetec + N
     
 def getMappingFunction(elevation, H):
-    rc1 = 6371.0 / (6371.0 + 200)
+    rc1 = 6371.0 / (6371.0 + H)
     f = np.sqrt(1 - (np.cos(np.radians(elevation))**2 * rc1**2))
     return f
 

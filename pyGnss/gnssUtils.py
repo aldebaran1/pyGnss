@@ -9,6 +9,14 @@ import numpy as np
 from scipy import signal
 import datetime
 import matplotlib.pyplot as plt
+from scipy.interpolate import CubicSpline
+
+#constnats for GPS
+f1 = 1575420000
+f2 = 1227600000
+f5 = 1176450000
+c0 = 299792458
+freq = {'1': f1, '2': f2, '5': f5}
 
 # %% Filtering
 def butter_hpf(highcut, fs, order):
@@ -184,4 +192,163 @@ def hilbertTransform(x, fs=1):
         return amplitude_envelope, instantaneous_phase, instantaneous_frequency
     
 # %%
+def CSnorm(L1, L, cycle_slip_idx, frequency = 2, verbose = False, plot = True):
+    global freq
+    # Normalized values
+    L1n = L1 / f1
+    Ln = L / freq[str(frequency)]
+    # Copy L
+    Y = np.copy(L)
+    # Add ix of the last entry 
+    cycle_slip_idx = np.append(cycle_slip_idx, L.shape[0])
+    # Zero mean strat
+    N = np.nanmedian(L1n[:cycle_slip_idx[0]] - Ln[:cycle_slip_idx[0]])
+    L1n -= N
+    # Correct for each interval
+    for i, ix in enumerate(cycle_slip_idx):
+        if i == 0: continue
+        ixl = cycle_slip_idx[i-1]
+        if ix - ixl <= 5: continue
+        Yn = Y / freq[str(frequency)]
+        N = np.nanmedian(L1n[ixl:ix] - Yn[ixl:ix])
+        corr = np.round(N * freq[str(frequency)])
+        Y[ixl:] += corr
+        if verbose: print ('{}:{}, Nnorm:{}, Corr: {}'.format(ixl,ix,N, corr))
+
+    # Outlier interval:
+    Rn = L1n - Y / freq[str(frequency)]
+    stdn = np.nanstd(Rn)
+    ixo = abs(Rn) > 5 * stdn
+    
+    if plot:
+        Len = L.shape[0]
+        x = np.arange(Len)
+        plt.figure()
+        plt.plot(Rn, 'b')
+        plt.plot([0, Len], [5*stdn, 5*stdn] , 'r')
+        plt.plot([0, Len], [-5*stdn, -5*stdn], 'r')
+        plt.plot(x[ixo], Rn[ixo], 'xr')
+    
+    Y[ixo] = np.nan
+    
+    return Y
+
+def phaseDetrend(y, order,polynom=False):
+    """
+    Sebastijan Mrak
+    Raw phase data detrending using N-th polinom approximation function.
+    Detrended output is input data subtracted with polinom approximation.
+    Output is of the same length as input data 'y'. 
+    """
+    x = np.arange(y.shape[0])
+    mask = np.isnan(y)
+    z = np.polyfit(x[~mask], y[~mask], order)
+    f = np.poly1d(z)
+    polyfit = f(x)
+    y_d = y-polyfit
+    
+    if polynom:
+        return y_d, polyfit
+    else:
+        return y_d
+
+def cycleSlipRepair(C, L, cycle_slip_idx, freq = 1, verbose = False, units = 'm'):
+    global f1, f2, f5, c0
+    if freq == 1:
+        lamb = c0 / f1
+    elif freq == 2:
+        lamb = c0 / f2
+    elif freq == 5:
+        lamb = c0 / f5
+    else:
+        raise ('Enter the rifght frequency channel [1,2,5]')
+    Y = np.copy(L)
+    if freq == 1: Cd, C = phaseDetrend(C, order=12, polynom=True)
+    for i, ix in enumerate(cycle_slip_idx):
+        if np.isfinite(L[ix]) and np.isfinite(C[ix]):
+            interval = np.arange(ix)
+            finite = np.isfinite(C[interval]) & np.isfinite(Y[interval])
+            if np.sum(finite) == 0: break
+            last_idx = interval[finite][-1]
+            if units == 'm':
+                CS_m = Y[ix] - np.nanmedian(Y[last_idx-5 : last_idx])
+                range_m = C[ix] - np.nanmedian(C[last_idx-5 : last_idx])
+                diff = range_m - CS_m
+                corr = (diff // lamb) * lamb
+    #            print (corr)
+                if verbose: print(ix, last_idx, CS_m, range_m, diff, corr)
+            elif units == 'cycle':
+                CS = Y[ix] - np.nanmedian(Y[last_idx-5 : last_idx])
+                CS_L1 = C[ix] - np.nanmedian(C[last_idx-5 : last_idx])
+                diff = CS_L1 - CS
+                corr = np.round(diff)
+                print (diff)
+            else:
+                break
+            Y[ix:] += corr
+        else:
+            Y[ix] = np.nan
+    return Y
+
+def cycleSlipIdx(x, idlli):
+    x_poly = phaseDetrend(x, order=12)
+    mask = np.flatnonzero(np.isnan(x_poly))
+    rmask = mask - 1 if mask-1 not in mask else mask - 2
+    x_poly[mask] = x_poly[rmask]
+    cycle_slip_idx = []
+    if idlli.shape[0] > 0:
+        for ix in idlli:
+            if (np.sign(x_poly[ix-1]) != np.sign(x_poly[ix])) or (abs(x_poly[ix-1] - x_poly[ix]) > 1.5):
+                cycle_slip_idx.append(ix)
+    else:
+        cycle_slip_idx = []
+    return (np.array(cycle_slip_idx))
+
+
+
+def RepairObs(D, idel, args = ['L1', 'L2', 'L5']):
+    obs = {}
+    for arg in args:
+        argc = arg.replace('L', 'P') if ('2' in arg) else arg.replace('L', 'C')
+        argi = arg + 'lli'
+        try:
+            C = D[argc].values[idel]
+            if np.nansum(np.isfinite(C)) < 600: continue
+            L = D[arg].values[idel]
+            if arg == 'L1': L1 = L
+            Li = D[argi].values[idel] % 2
+            idlli = np.where(Li == 1)[0]
+            cycle_slip_idx = cycleSlipIdx(L, idlli)
+            # Convert to meters
+            Lmeter = L * c0 / freq[arg[-1]]
+            # Correct cycle slips
+            if cycle_slip_idx.shape[0] > 0:
+                if arg == 'L1':
+                    mask = np.isfinite(C)
+                    x = np.arange(C.shape[0])
+                    CS = CubicSpline(x[mask], C[mask])
+                    C1 = CS(x)
+                    L1meter = cycleSlipRepair(C1, Lmeter, cycle_slip_idx, 
+                                             freq = 1, verbose = False,
+                                             units = 'm')
+                    L = L1meter / c0 * f1
+                    L1 = L
+                else:
+                    L = CSnorm(L1, L, cycle_slip_idx, plot = False, verbose = False, frequency = arg[-1])
+            # Convert back to cycles
+            Ld, Lp = phaseDetrend(L, order = 12, polynom = True)
+            x = np.arange(Ld.shape[0])
+            mask= np.isnan(Lp)
+            Ldp = np.copy(Ld)
+            Ldp[mask] = np.interp(x[mask], x[~mask], Ld[~mask])
+            Lps = hpf(Ldp)
+            Lps[:15] = np.nan
         
+            obs[arg] = L
+            obs[argc] = C
+            obs[arg+'d'] = Ldp
+            obs[arg+'p'] = Lps
+            obs[arg + 'lli'] = cycle_slip_idx
+        except:
+            pass
+    return obs
