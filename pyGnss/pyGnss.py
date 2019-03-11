@@ -17,12 +17,36 @@ from pandas import Timestamp
 from pyRinex import pyRinex
 import georinex as gr
 from pyGnss import gnssUtils as uf
+from glob import glob
 
 #constnats for GPS
 f1 = 1575420000
 f2 = 1227600000
 f5 = 1176450000
 c0 = 299792458
+
+def getSatBias(fn):
+    import os
+    if os.path.isdir(fn):
+        fn = glob(fn + '*.**i')
+        if len(fn) >= 1:
+            fn = fn[0] 
+        else: 
+            raise('No satbias files found in the folder')
+            return 0
+    i = 0
+    svbias = {}
+    with open(fn, 'r') as f:
+        while 1:
+            line = f.readline()
+            if 'DIFFERENTIAL CODE BIASES' in line:
+                while i < 32:
+                    l = f.readline().split()[:2]
+                    svbias['G'+l[0]] = float(l[1])
+                    i += 1
+                f.close()
+                break
+    return svbias
 
 # %% TEC
 def getPRNSlantTEC(P1, P2, units='m'):
@@ -167,10 +191,12 @@ def getVerticalTEC(tec, el, h, Fout=False):
     for i in range(len(tec)):
         if np.isnan(tec[i]):
             vTEC.append(np.nan)
-            f = np.cos(np.arcsin(rc1*np.cos(np.radians(el[i]))))
+#            f = np.cos(np.arcsin(rc1*np.cos(np.radians(el[i]))))
+            f = np.sqrt(1 - (np.cos(np.radians(el[i]))**2 * rc1**2))
             F.append(f)
         else:
-            f = np.cos(np.arcsin(rc1*np.cos(np.radians(el[i]))))
+#            f = np.cos(np.arcsin(rc1*np.cos(np.radians(el[i]))))
+            f = np.sqrt(1 - (np.cos(np.radians(el[i]))**2 * rc1**2))
             vTEC.append(f * tec[i])
             F.append(f)
     
@@ -791,7 +817,10 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
     return Y
 
 def dataFromNC(fnc,fnav,sv,
-               el_mask=30,tlim=None):
+               el_mask=30,tlim=None, 
+               satpos=False,
+               ipp=False,
+               ipp_alt=None):
     leap_seconds = uf.getLeapSeconds(fnav)
     D = gr.load(fnc, useindicators=True).sel(sv=sv)
     if tlim is not None:
@@ -803,5 +832,22 @@ def dataFromNC(fnc,fnav,sv,
     rx_xyz = D.position
     aer = gpsSatPosition(fnav,dt,sv=sv, rx_position=rx_xyz, coords='aer')
     idel = (aer[1] >= el_mask)
+    aer = aer[:, idel]
     dt = dt[idel]
+    if satpos:
+        D['az'] = aer[0]
+        D['el'] = aer[1]
+    if ipp:
+        if ipp_alt is None:
+            print ('Auto assigned altitude of the IPP: 250 km')
+            ipp_alt = 250e3
+        else:
+            ipp_alt *= 1e3
+        rec_lat, rec_lon, rec_alt = ecef2geodetic(rx_xyz[0], rx_xyz[1], rx_xyz[2])
+        fm = np.sin(np.radians(aer[1]))
+        r_new = ipp_alt / fm
+        lla_vector = np.array(aer2geodetic(aer[0], aer[1], r_new, rec_lat, rec_lon, rec_alt))
+        D['ipp_lon'] = lla_vector[1]
+        D['ipp_lat'] = lla_vector[0]
+        D['ipp_alt'] = ipp_alt
     return dt, D, idel

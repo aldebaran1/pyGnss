@@ -98,7 +98,38 @@ def _plotDuo(t,y1,y2,ylim1=None,ylim2=None,xlim=None,title='',figsize=(8,5),
     ax1.xaxis.set_major_formatter(date_formatter)
     
     return fig
+
+def _plotMultiple(t, Y, xlim=None,ylim=None,figsize=(8,5),title='',
+                  xlabel='',ylabel='',c='b',formatter='%H:%M:%S',
+                  lw=1,xgrid=False,ygrid=False):
+    date_formatter = DateFormatter(formatter)
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+    for i,y in enumerate(Y):
+        if isinstance(c, list):
+            ax.plot(t[i],Y[i],c[i],lw=lw)
+        else:
+            ax.plot(t[i],Y[i],lw=lw)
+    if ylim is not None:
+        ax.set_ylim(ylim)
+    if xlim is not None:
+        ax.set_xlim(xlim)
     
+    if ygrid:
+        ax.yaxis.grid(linestyle='--')
+    if xgrid:
+        ax.xaxis.grid(linestyle='--')
+    
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.tick_params(direction='in')
+    ax.tick_params(direction='in')
+    ax.xaxis.set_major_formatter(date_formatter)
+    
+    return fig
+
+
 def _plotEnvelope(t,y1,y2,title='',xlim=None,ylim=None,figsize=(8,5),
                   xlabel='',ylabel='',c1='b',c2='r',formatter='%H:%M:%S',
                   xgrid=False,ygrid=False):
@@ -125,7 +156,20 @@ def _plotEnvelope(t,y1,y2,title='',xlim=None,ylim=None,figsize=(8,5),
     ax.xaxis.set_major_formatter(date_formatter)
     
     return fig
+
+def _plotOrbit(az,el):
+    fig = plt.figure(figsize=(5,5))
+    ax = fig.add_subplot(111, projection='polar')
+    for i in range(len(az)):
+        rel = 90 - el[i]
+        ax.plot(np.radians(az[i]), rel)
+    ax.set_theta_zero_location('N')
+    ax.set_theta_direction(-1)
+    ax.set_yticks(np.arange(0,61,20))
+    ax.set_yticklabels([90,70,50,30])
+    ax.set_ylim(0,60)
     
+    return fig
 ###############################################################################
 def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
              sp=True,s4=False,polyfit=False,indicator=False,
@@ -136,7 +180,8 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
     rx_xyz = D.position
     leap_seconds = gu.getLeapSeconds(nav)
     obstimes64 = D.time.values
-    times = np.array([Timestamp(t).to_pydatetime() for t in obstimes64]) - timedelta(seconds = leap_seconds)
+    times = np.array([Timestamp(t).to_pydatetime() for t in obstimes64]) - \
+                        timedelta(seconds = leap_seconds)
     # define tlim ie. skip
     if tlim is not None:
         s = ((times>=tlim[0]) & (times<=tlim[1]))
@@ -145,7 +190,7 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
         s[:skip] = False
     times = times[s]
     # Get satellite position
-    aer = pyGnss.getSatellitePosition(rx_xyz, sv, times, nav, cs='aer',dtype='georinex')
+    aer = np.array(pyGnss.getSatellitePosition(rx_xyz, sv, times, nav, cs='aer',dtype='georinex'))
     # Elevation mask
     idel = aer[1] >= el_mask
     times = times[idel]
@@ -174,23 +219,26 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
                     print (e)
             if rawplot:
                 _plot(times,X,arg)
-        if arg[0] == 'L' or arg[0] == 'C':
-            if arg == 'C1':
-                X = X * f1 / c0 # To cycles
-            Xd = pyGnss.phaseDetrend(X, order=porder)
-                
-            if polyfit:
-                # To dict
-                Y[arg+'polyfit'] = Xd
-            if rawplot:
+        try:
+            if arg[0] == 'L' or arg[0] == 'C':
+                if arg == 'C1':
+                    X = X * f1 / c0 # To cycles
+                Xd = pyGnss.phaseDetrend(X, order=porder)
+                    
+                if polyfit:
+                    # To dict
+                    Y[arg+'polyfit'] = Xd
                 if rawplot:
-                    _plot(times,Xd,arg+'_detrend_poly')
-            if sp:
-                Xy = gu.hpf(Xd, order=forder,fc=fc,plot=False,fs=fs)
-                # To dict
-                Y['sp'] = Xy
-                if rawplot:
-                    _plot(times[100:],Xy[100:],arg+'_scint')
+                    if rawplot:
+                        _plot(times,Xd,arg+'_detrend_poly')
+                if sp:
+                    Xy = gu.hpf(Xd, order=forder,fc=fc,plot=False,fs=fs)
+                    # To dict
+                    Y['sp'] = Xy
+                    if rawplot:
+                        _plot(times[100:],Xy[100:],arg+'_scint')
+        except:
+            pass
         if arg[0] == 'S':
             if s4:
                 Xy = pyGnss.AmplitudeScintillationIndex(X,60)
@@ -210,7 +258,8 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
                 L1 = D.sel(sv=sv)['L1'].values[s][idel]
                 C2 = D.sel(sv=sv)['C5'].values[s][idel]
                 L2 = D.sel(sv=sv)['L5'].values[s][idel]
-            sTEC = pyGnss.getPhaseCorrTEC(L1, L2, C1, C2,channel=tec_ch)
+            sTEC = pyGnss.getPhaseCorrTEC(L1, L2, C1, C2,channel=tec_ch,
+                                          maxgap=1,maxjump=1)
             sTEC = sTEC - np.nanmin(sTEC)
             if arg == 'sTEC':
                 # To dict
@@ -225,8 +274,9 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
                     _plot(times, vTEC, title=arg)
     return Y
 
-def mahali(folder = 'E:\\mahali\\',day=280,rx=9,sv='G09',
-           args = ['C1', 'L1', 'S1', 'L5', 'vTEC'],tlim=None):
+
+
+def mahali(folder='E:\\mahali\\',day=280,rx=9):
     # Init
     date = datetime.strptime(str(2015)+str(day), '%Y%j')
     directory = date.strftime('%Y-%m-%d')
@@ -240,114 +290,234 @@ def mahali(folder = 'E:\\mahali\\',day=280,rx=9,sv='G09',
              '9': 'mah9'+str(day)+'0.15o.nc',
              '13': 'ma13'+str(day)+'0.15o.nc',}
     folder = 'E:\\mahali\\' + directory + '\\'
-    nc = rxmah[str(rx)]
+    if isinstance(rx, int):
+        nc = rxmah[str(rx)]
+        fnc = folder + nc
+    elif isinstance(rx, list):
+        fnc = []
+        for r in rx:
+            nc = rxmah[str(rx)]
+            fnc.append(folder + nc)
     nav = 'brdc'+str(day)+'0.15n'
-    fnc = folder + nc
     fnav = folder + nav
-    # Obs
-    data = pyGnss.singleRx(fnc, fnav, args=args, sv=sv,
-                    porder=12, forder=5,fc=0.1,tlim=tlim,
-                    s4=False, rawplot=False,tec_ch=2,
-                    indicator=False,polyfit=True)
-    dt = data['times']
     
-    return data, dt
+    return fnc, fnav
 
-save = 'C:\\Users\\smrak\\Google Drive\\BU\\Projects\\imprint\\figures\\raw\\'
-save = ''
-#ft = 'MOAT_glitch_L1C1'
-#ft = 'mag6_phase_scint'
-#tlim = [datetime(2015,10,7,6,10,0), datetime(2015,10,7,6,45,0)]
-#tlim = [datetime(2017,8,21,15,0,0), datetime(2017,8,21,22,0,0)]
+def eclipse(folder='E:\\mo\\',rxname:str='',day=233):
+    
+    fnc = folder + rxname.upper() + str(day) + '0.17o.nc'
+    fnav= folder + 'brdc' + str(day) + '0.17n'
+    
+    return fnc, fnav
+
+def ublox(folder='E:\\ublox\\', day=240, fn=''):
+    
+    fnc = folder + fn + '.18o.nc'
+    fnav= folder + 'brdc'+str(day)+'0.18n'
+    return fnc, fnav
+
+savefolder = 'C:\\Users\\smrak\\Google Drive\\BU\\Projects\\PhD\\PhDProspectus\\raw\\'
+
+args = ['C1', 'L1', 'S1', 'L2', 'vTEC']
+#args = []
+sv = 'G23'
+rx =7
+fnc, fnav = mahali(rx=rx,day=280)
+#fnc = 'E:\\mahali\\2015-10-07\\ac672800.15o.nc'
+#fnav = 'E:\\mahali\\2015-10-07\\brdc2800.15n'
+#fnc, fnav = eclipse(rxname='MOAT')
+#fnc, fnav = ublox(fn='ub_homet3', day=242)
 tlim = None
-#folder = 'E:\\mahali\\2015-10-07\\'
-#nc = 'nc\\mah92800.15o.nc'
-#nav = 'brdc2800.15n'
-# MO
-#folder = 'E:\\mo\\'
-#nc = 'MOJC2330.17o.nc' #MOAT
-#nav= 'MOJC2330.17n'
-#nc = 'MOAT2330.17o.nc'
-# Ublox
-#folder = 'E:\\ublox\\'
-#nc = 'ub_homet3.18o.nc'
-#nav= 'brdc2420.18n'
-#fnc = folder + nc
-#fnav = folder + nav
-data, dt = mahali(rx=9,day=280,sv='G23',args=['C1', 'L1', 'S1', 'vTEC'], tlim=tlim)
+#tlim = [datetime(2015,10,7,6,0,0), datetime(2015,10,7,8,30,0)]
+# Obs
+if isinstance(sv, str):
+    data = singleRx(fnc, fnav, args=args, sv=sv,el_mask=30,
+                    porder=8, forder=6,fc=0.1,tlim=tlim,
+                    s4=False, rawplot=False,tec_ch=2,
+                    indicator=False,polyfit=True,sp=True)
+    dt = data['times']
+elif isinstance(sv, list):
+    data = []
+    for sv in sv:
+        data.append(singleRx(fnc, fnav, args=args, sv=sv,
+                    porder=8, forder=6,fc=0.1,tlim=tlim,
+                    s4=False, rawplot=False,tec_ch=2,
+                    indicator=False,polyfit=True))
 
-xlim = [datetime(2015,10,7,6,10,0), datetime(2015,10,7,6,35,0)]
+# Tlim
+#xlim = [datetime(2017,8,21,17,0,0), datetime(2017,8,21,18,0,0)]
+xlim = [datetime(2015,10,7,6,15,0), datetime(2015,10,7,7,10,0)]
+# xcorr
+from scipy import signal
+
+idt = np.where( (dt>=xlim[0]) & (dt<=xlim[1]))[0]
+X = data['C1polyfit'][idt]
+Y = data['L1polyfit'][idt]
+corr = signal.correlate(X, Y, mode='same') / X.shape[0]
+_plotOneParam(dt, data['sp'], ygrid=True,
+                  figsize=(8,4), xlim=xlim,
+#                  ylim=[-1,1],
+                  formatter='%H:%M')
+
+_plotOneParam(dt, (data['C1polyfit']*f1/c0)-data['L1polyfit'], ygrid=True,
+                  figsize=(8,4), xlim=xlim,
+#                  ylim=[-1,1],
+                  formatter='%H:%M')
+
+f = _plotDuo(dt,data['sp'], data['vTEC'],xlim=xlim,
+             ylabel1='scintillation [cycle]',
+             ylabel2='$\delta$ TEC [TECu]',
+             xlabel='(2017-10-07) time [UT]',
+             ylim1=[-15,5],
+             formatter='%H:%M',
+             figsize=(10,4),
+             c1='b', c2='k', lw1=2,lw2=2)
+
+f = _plotDuo(dt, data['C1polyfit']*f1/c0/2+5, data['L1polyfit']-5,xlim=xlim,
+             ylabel1='$\delta \Phi$ [cycle]',
+             ylabel2='$\delta Range$ [cycle]',
+             xlabel='(2017-10-07) time [UT]',
+             ylim1=[-30,40], ylim2=[-30,15],
+             formatter='%H:%M',
+             c1='r', c2='b', lw1=2,lw2=2)
+
+L1scint = gu.hpf(data['sp'], fc=0.1, order=3)
+
+#az = []
+#el = []
+#for i in range(len(data)):
+#    az.append(data[i]['az'])
+#    el.append(data[i]['el'])
+    
+#f = _plotOrbit(az,el)
+#f.savefig(savefolder + 'orbits' + '.png', dpi=300)
+################################ PLOT #########################################
+#_plot(dt, data['C1'])
+#_plot(dt, data['L1'])
+#_plot(dt, data['C1polyfit'])
+#_plot(dt, data['L1polyfit'])
+# --------------------------------------------------------------------------- #
+
+
+#f = _plotDuo(dt,data['vTEC'], data['L1polyfit'],xlim=xlim,
+#             ylabel1='TEC [TECu]',
+#             ylabel2='$\delta \Phi$ [cycle]',
+#             xlabel='(2017-10-07) time [UT]',
+#             c1='b', c2='k', lw1=2,lw2=2)
+#
+#_plotOneParam(dt[idt], corr, ygrid=True,
+#                  figsize=(8,4),
+##                  ylim=[-1,1],
+#                  formatter='%H:%M')
+
+#f.savefig(savefolder + 'L1scint_mah9' + '.png', dpi=300)
+#
+#f = _plotOneParam(dt,data['L1polyfit'],xlim=xlim,ygrid=True,
+#                  figsize=(8,4),
+##                  ylim=[-1,1],
+#                  formatter='%H:%M',
+#                  ylabel='$\Delta$ Range [m]',
+#                  xlabel='(2017-10-07) time [UT]')
+#f.savefig(savefolder + 'netr5_noise' + '.png', dpi=300)
+#
+#env, ph, freq = gu.hilbertTransform(data['sp'][100:])
+#f = _plotEnvelope(dt[100:], data['sp'][100:], env, xlim=xlim,
+#              ylim = [-4,4],
+#              formatter='%H:%M',
+#              ygrid=True)
+#f.savefig(savefolder + 'envelope_mah5_sv23_zoom' + '.png', dpi=300)
+
+#f = _plotDuo(dt,data['vTEC'], data['sp'],xlim=xlim,
+#             figsize=(8,4),
+#             ylim1=[0, 15],
+#             ylabel1='TEC [TECu]',
+#             ylabel2='scintillation [cycle]',
+#             xlabel='(2017-10-07) time [UT]',
+#             c1='b', c2='k', lw1=2,lw2=1)
+#f.savefig(savefolder + 'tec_scint_mah'+str(rx) + '.png', dpi=300)
+
+#
+#Y = [D[0]['sp'],D[1]['sp'],D[2]['sp']]
+#T = [D[0]['times'],D[1]['times'],D[2]['times']]
+#_plotMultiple(T, Y,xlim=xlim,ylim=[-3,3],c=['.b','xk','or'],
+#              ygrid=True)
+
+
+#f.savefig(savefolder + 'L1scint_mah9' + '.png', dpi=300)
+
 #xlim = [datetime(2017,8,21,17,10,0), datetime(2017,8,21,18,0,0)]
-ylim = [-3.14*8, 3.14*15]
-ylim = [-3.14, 3.14]
-y = 2*np.pi*data['sp']
-#title = nc
-ylabel = 'Scint [rad]'
-_plotOneParam(dt,y,c='b',title=title,xlim=xlim,ylabel=ylabel,
-              ylim=ylim,ygrid=True,formatter='%H:%M')
-
-title = 'Polyfit'
-ylabel = 'L1 phase [cycle]'
-_plotOneParam(dt,f1/c0*data['C1polyfit'],ylabel=ylabel,xlim=xlim,ygrid=True,formatter='%H:%M')
-
-ylabel = 'dTEC from dL1'
-dTEC = pyGnss.retreiveDTECfromPhase(data['L1polyfit'],f=f1,units='cycle')
-_plotOneParam(dt, dTEC,ylabel=ylabel,xlim=xlim,ygrid=True,formatter='%H:%M')
-#_plotOneParam(dt,data['L1polyfit'],ylabel=ylabel,xlim=xlim,ygrid=True,formatter='%H:%M')
-
-
-ylabel = 'TEC [TECu]'
-_plotOneParam(dt, data['vTEC'], ylabel=ylabel,xlim=xlim,ygrid=True,formatter='%H:%M')
-
-sfTEC = 0.5 * pyGnss.singleFrequencyTEC(data['L1'], data['C1'], el=data['el'],vertical=True)
-ylabel = 'sfTEC'
-_plotOneParam(dt, sfTEC, ylabel=ylabel,xlim=xlim,ygrid=True,formatter='%H:%M')
+#ylim = [-3.14*8, 3.14*15]
+#ylim = [-3.14, 3.14]
+#y = 2*np.pi*data['sp']
+#title = ''
+#ylabel = 'Scint [rad]'
+#_plotOneParam(dt,y,c='b',title=title,xlim=xlim,ylabel=ylabel,
+#              ylim=ylim,ygrid=True,formatter='%H:%M')
+#
+#title = 'Polyfit'
+#ylabel = 'L1 phase [cycle]'
+#_plotOneParam(dt,f1/c0*data['C1polyfit'],ylabel=ylabel,xlim=xlim,ygrid=True,
+# formatter='%H:%M')
+#
+#ylabel = 'dTEC from dL1'
+#dTEC = pyGnss.retreiveDTECfromPhase(data['L1polyfit'],f=f1,units='cycle')
+#_plotOneParam(dt, dTEC,ylabel=ylabel,xlim=xlim,ygrid=True,formatter='%H:%M')
+##_plotOneParam(dt,data['L1polyfit'],ylabel=ylabel,xlim=xlim,ygrid=True,formatter='%H:%M')
+#
+#
+#ylabel = 'TEC [TECu]'
+#_plotOneParam(dt, data['vTEC'], ylabel=ylabel,xlim=xlim,ygrid=True,formatter='%H:%M')
+#
+#sfTEC = 0.5 * pyGnss.singleFrequencyTEC(data['L1'], data['C1'], el=data['el'],vertical=True)
+#ylabel = 'sfTEC'
+#_plotOneParam(dt, sfTEC, ylabel=ylabel,xlim=xlim,ygrid=True,formatter='%H:%M')
 #
 #title= 'Hilbert'
 #envelope, phi, freq = returnHT(y)
 #_plotHilbert(dt,y,envelope,phi,frequency=abs(freq), xlim=xlim, title=title,formatter='%H:%M')
 #
 #title = nc
-ylabel1 = 'L1-pL1fit = dL1 [rad]'
-ylabel2 = 'L1scint [rad]'
-xlabel = 'Time [UTC]'
-y1 = 2 * np.pi * data['L1polyfit']
-y2 = 2 * np.pi * data['sp']
-ylim1 = [np.nanmin(y1)+0.1*np.nanmin(y1), np.nanmax(y1)+0.1*np.nanmax(y1)]
-ylim2 = [np.nanmin(y2)+0.1*np.nanmin(y1), np.nanmax(y2)+0.1*np.nanmax(y1)]
-ylim2 = [-200,25]
-y2ticks = [-50,-25,0,25,50]
-#y2ticks = [-25,0,25]
-_plotDuo(dt,y1,y2,xlim=xlim,ylim1=ylim1,ylim2=ylim2,
-         title=title,xlabel=xlabel,ylabel1=ylabel1,ylabel2=ylabel2,
-         y2ticks=y2ticks,
-         c1='--b',c2='-k',formatter='%H:%M')
+##############################33 Polyfit and scintillation ####################
+#ylabel1 = 'L1-pL1fit = dL1 [rad]'
+#ylabel2 = 'L1scint [rad]'
+#xlabel = 'Time [UTC]'
+#y1 = 2 * np.pi * data['L1polyfit']
+#y2 = 2 * np.pi * data['sp']
+#ylim1 = [np.nanmin(y1)+0.1*np.nanmin(y1), np.nanmax(y1)+0.1*np.nanmax(y1)]
+#ylim2 = [np.nanmin(y2)+0.1*np.nanmin(y1), np.nanmax(y2)+0.1*np.nanmax(y1)]
+#ylim2 = [-200,25]
+#y2ticks = [-50,-25,0,25,50]
+##y2ticks = [-25,0,25]
+#_plotDuo(dt,y1,y2,xlim=xlim,ylim1=ylim1,ylim2=ylim2,
+#         title=title,xlabel=xlabel,ylabel1=ylabel1,ylabel2=ylabel2,
+#         y2ticks=y2ticks,
+#         c1='--b',c2='-k',formatter='%H:%M')
 
 ############# Compare TECs, dual freq and single freq retreival ###############
-title = 'Campare both TECs'
-ylabel1 = '(standard) TEC [TECu]'
-ylabel2 = '(single freq) TEC [TECu]'
-xlabel = 'Time [UTC]'
-y1 = data['vTEC']
-#y2 = sfTEC
-tecdiff = np.nanmean(y1)-np.nanmean(sfTEC)
-y2 = sfTEC + tecdiff
-ylim1 = [np.nanmin(y1)+0.5*np.nanmin(y1), np.nanmax(y1)+0.1*np.nanmax(y1)]
-ylim1 = [-2, 8]
-ylim2 = ylim1
-_plotDuo(dt,y2,y1,xlim=xlim,ylim1=ylim1,ylim2=ylim2,
-         title=title,xlabel=xlabel,ylabel1=ylabel1,ylabel2=ylabel2,
-         c1='r',c2='b',formatter='%H:%M',lw1=1,lw2=2)
+#title = 'Campare both TECs'
+#ylabel1 = '(standard) TEC [TECu]'
+#ylabel2 = '(single freq) TEC [TECu]'
+#xlabel = 'Time [UTC]'
+#y1 = data['vTEC']
+##y2 = sfTEC
+#tecdiff = np.nanmean(y1)-np.nanmean(sfTEC)
+#y2 = sfTEC + tecdiff
+#ylim1 = [np.nanmin(y1)+0.5*np.nanmin(y1), np.nanmax(y1)+0.1*np.nanmax(y1)]
+#ylim1 = [-2, 8]
+#ylim2 = ylim1
+#_plotDuo(dt,y2,y1,xlim=xlim,ylim1=ylim1,ylim2=ylim2,
+#         title=title,xlabel=xlabel,ylabel1=ylabel1,ylabel2=ylabel2,
+#         c1='r',c2='b',formatter='%H:%M',lw1=1,lw2=2)
 ################################ C and L ######################################
-y2 = data['L1polyfit']
-y1 = data['C1polyfit']
-ylabel1 = 'C1 [cycle]'
-ylabel2 = 'L1 [cycle]'
-ylim1 = [np.nanmin(y2)+0.1*np.nanmin(y2), np.nanmax(y2)+0.1*np.nanmax(y2)]
-ylim2=ylim1
-f = _plotDuo(dt,y1,y2,xlim=xlim,ylim1=ylim1,ylim2=ylim2,
-         title=title,xlabel=xlabel,ylabel1=ylabel1,ylabel2=ylabel2,
-         c1='r',c2='b',formatter='%H:%M',lw1=1,lw2=2)
+#y2 = data['L1polyfit']
+#y1 = data['C1polyfit']
+#ylabel1 = 'C1 [cycle]'
+#ylabel2 = 'L1 [cycle]'
+#ylim1 = [np.nanmin(y2)+0.1*np.nanmin(y2), np.nanmax(y2)+0.1*np.nanmax(y2)]
+#ylim2=ylim1
+#f = _plotDuo(dt,y1,y2,xlim=xlim,ylim1=ylim1,ylim2=ylim2,
+#         title=title,xlabel=xlabel,ylabel1=ylabel1,ylabel2=ylabel2,
+#         c1='r',c2='b',formatter='%H:%M',lw1=1,lw2=2)
 ###############################################################################
 #if save is not None and save is not '':
 #    save = save + ft + '.png'

@@ -69,7 +69,7 @@ def bpf(y, lowcut, highcut, fs=1, order=5, plot=False):
         plt.grid(which='both', axis='both')
     return y_filt , gd[idx]
 
-def hpf(y, fc=0.1, order=5, fs=1,plot=False, group_delay=False):
+def hpf(y, fc=0.1, order=5, fs=1,plot=False, group_delay=False, verbatim=False):
     """
     Sebastijan Mrak
     Filter the input data 'y' with desired HP filter.  
@@ -78,7 +78,7 @@ def hpf(y, fc=0.1, order=5, fs=1,plot=False, group_delay=False):
     y_filt = signal.lfilter(b, a, y)
     w, h = signal.freqz(b, a, worN=1000)
     gd = -np.diff(np.unwrap(np.angle(h)))/np.diff(w)
-    print ('Group delay of the filter is '+ str(gd[-1])+' samples.')
+    if verbatim: print ('Group delay of the filter is '+ str(gd[-1])+' samples.')
     if plot:
         plt.figure()
         plt.semilogx(w, 20*np.log10(np.abs(h)))
@@ -101,12 +101,12 @@ def hpf(y, fc=0.1, order=5, fs=1,plot=False, group_delay=False):
     else:
         return y_filt
 
-def lpf(y, fc=0.1, order=5, fs=1, plot=False, group_delay=False):
+def lpf(y, fc=0.1, order=5, fs=1, plot=False, group_delay=False, verbatim=False):
     b, a = butter_lpf(fc, fs, order)
     y_filt = signal.lfilter(b, a, y)
     w, h = signal.freqz(b, a, worN=1000)
     gd = -np.diff(np.unwrap(np.angle(h)))/np.diff(w)
-    print ('Group delay of the filter is '+ str(gd[1])+' samples.')
+    if verbatim: print ('Group delay of the filter is '+ str(gd[1])+' samples.')
     if plot:
         plt.figure()
         plt.semilogx(w, np.log10(np.abs(h)))
@@ -184,48 +184,4 @@ def hilbertTransform(x, fs=1):
         return amplitude_envelope, instantaneous_phase, instantaneous_frequency
     
 # %%
-def cycleSlipDetect(y, cslim=50, csmargin=0.05):
-    """
-    Cycle slip detection amgorithm that uses a 3rd order difference methodology to
-    supress random flustuations and magnifies the cycle slip. Output is a list of
-    indexes of cycle slips and an estimate of cycle slip value at each index
-    """
-    l_diff_11 = np.diff(y) # Diff 1st order
-    l_diff_11 = np.hstack((np.nan, l_diff_11))
-    l_diff_21 = np.diff(l_diff_11) # Diff 2nd order
-    l_diff_21 = np.hstack((np.nan, l_diff_21))
-    l_diff_31 = np.diff(l_diff_21) # Diff 3rd order 
-    l_diff_31 = np.hstack((l_diff_31, np.nan))
-    
-    ll_1 = np.round(np.nan_to_num(l_diff_31))
-    
-    cs_ix1= []
-    cs_value1 = []
-    for i in range(len(ll_1) - 2):
-        if abs(ll_1[i+1]) > cslim:
-            current_value = np.round(ll_1[i+1])
-            previous_value = np.round(ll_1[i])
-            next_value = np.round(ll_1[i+2])
-            #Even valued samples
-            if (current_value % 2) == 0:
-                
-                if ( 
-                    (abs(current_value - np.round(-2 * next_value)) < current_value*csmargin) or 
-                    (abs(current_value - np.round(-2 * previous_value)) < current_value*csmargin)
-                    ):
-                    cs_ix1.append(i+1)
-                    cs_value1.append(- (l_diff_31[i+1])/2)
-            #Odd values samples
-            else: 
-                if (
-                    (abs(current_value == np.round(-2 * next_value+1)) < current_value*csmargin) or 
-                    (abs(current_value == np.round(-2 * next_value-1)) < current_value*csmargin) or 
-                    (abs(current_value == np.round(-2 * previous_value+1)) < current_value*csmargin) or 
-                    (abs(current_value == np.round(-2 * previous_value-1)) < current_value*csmargin)
-                    ):
-                    cs_ix1.append(i+1)
-                    cs_value1.append(- (l_diff_31[i+1])/2)
-
-    print (cs_ix1, cs_value1)
-    print (y[cs_ix1])
-    return cs_ix1, cs_value1
+        

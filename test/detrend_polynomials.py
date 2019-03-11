@@ -84,7 +84,7 @@ for day in np.arange(day[0],day[1]+1):
     dt, D, idel = dataFromNC(fnc,fnav,tlim=tlim)
     
     # L1
-    L1 = D['L1'].values[idel]
+    L1 = D['C1'].values[idel]
     prange = [2,15]
     porders = np.arange(prange[0], prange[1]+1)
     mean, residualsum = detrendMetric(L1, porders)

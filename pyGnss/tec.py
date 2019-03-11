@@ -19,7 +19,7 @@ def slantTEC(C1: np.ndarray = None,
              L1: np.ndarray = None, 
              L2: np.ndarray = None, 
              tec_type: str = 'range', 
-             fpair: Union(list, np.ndarray) = [1, 2]):
+             fpair: Union[list, np.ndarray] = [1, 2]):
     """
     Compute total electron content using any combination of observations. 
     Note that C1/L1 must be observations at higher frequency than C2/L2
@@ -55,7 +55,7 @@ def getMappingFunction(elevation, H):
 def getVerticalTEC(stec: np.ndarray = None,
                    F: np.ndarray = None,
                    elevation: np.ndarray = None,
-                   H: Union(int, float) = None):
+                   H: Union[int, float] = None):
     """
     
     """
