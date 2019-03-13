@@ -8,11 +8,13 @@ Created on Tue Jul  4 13:25:38 2017
 import os
 import glob
 import platform
+from numpy import array, isin
+import yaml
 from time import sleep
 import georinex as gr
+from datetime import datetime
 
 def _convert(file, odir, i, tlim=None):
-    print ('Converting file: ', file)
     try:
         gr.load(file,out=odir, useindicators=i, fast=False, tlim=tlim)
     except Exception as e:
@@ -33,47 +35,64 @@ def _iterate(file, odir, override, i, tlim=None):
         _convert(file, odir, i, tlim=tlim)
         
 def convertObs2HDF(folder=None, sufix=None, odir=None, override=False,
-                   i=False, tlim=None):
+                   i=False, tlim=None, rxlist = None):
     """
     This script converts RINEX 2.11 observation files in a given directory into
     a hdf5 organized data structure, utilizing pyRINEX script. Find the script
     in the main directory.
     """
-    if os.path.isdir(folder):
-        if sufix is None:
-            wlist = ['*.**o', '*.**O', '*.**d']
+    if odir is None:
+        if os.path.isdir(folder):
+            odir = folder
+        elif os.path.isfile(folder):
+            odir = os.path.split(folder)[0]
         else:
-            wlstr = sufix
-        if odir is None:
-            odir = folder
-        for wlstr in wlist:
-            filestr = os.path.join(folder,wlstr)
-            flist = sorted(glob.glob(filestr))
-            for file in flist:
-                _iterate(file, odir, override, i, tlim=tlim)
-    elif os.path.isfile(folder):
-        if odir is None:
-            odir = folder
-        if folder[-1] == 'o' or folder[-1] == 'O' or folder[-1] == 'd' or folder[-1] == 'D': # Very stupid / change to match OBS file template
-            head, tail = os.path.split(folder)
-            odir = head
-            file = folder
+            raise('odir must be either a folder or a directory')
+    if rxlist is not None:
+        assert os.path.isfile(rxlist), 'Input argument must be a file, not folder!'
+        assert os.path.splitext(rxlist)[1] == '.yaml', 'File must be .yaml format.'
+        
+        stream = yaml.load(open(rxlist, 'r'))
+        rxl = array(sorted(stream.get('rx')))
+        print('Number of files to convert: {}'.format(stream.get('total')))
+        sx = '*.*d' if sufix is None else sufix
+        flist = array(sorted(glob.glob(os.path.join(folder, sx))))
+        fnamelist = array([os.path.split(r)[1][:4] for r in flist])
+        idl = isin(fnamelist, rxl)
+        t0 = datetime.now()
+        for i, file in enumerate(flist[idl]):
+            print ('Converting: {}/{}'.format(i+1, flist[idl].shape[0]))
             _iterate(file, odir, override, i, tlim=tlim)
-        else:
-            print ('Not a RInex OBS file (.o or .d)')
+        t1 = datetime.now()
+        print ('Conversion successfull. It took {}s to convert them, at an average of {} per file.'.format(t1-t0, (t1-t0)/flist[idl].shape[0]))
+
     else:
-        print ("Something went wrong, dude")
-                    
+        if os.path.isdir(folder):
+            if sufix is None:
+                wlist = ['*.**o', '*.**O', '*.**d']
+            else:
+                wlstr = sufix
+            for wlstr in wlist:
+                filestr = os.path.join(folder,wlstr)
+                flist = sorted(glob.glob(filestr))
+                for file in flist:
+                    _iterate(file, odir, override, i, tlim=tlim)
+        elif os.path.isfile(folder):
+                file = folder
+                _iterate(file, odir, override, i, tlim=tlim)
+        else:
+            raise ("Something went wrong, dude")
 if __name__ == '__main__':
     from argparse import ArgumentParser
     p = ArgumentParser()
-    p.add_argument('folder',type=str)
-    p.add_argument('-odir', '--odir', help='Destination folder, if None-> the same as input folder', default=None)
-    p.add_argument('-f', '--force', help="Force override, if the NC file already exist", action='store_true')
-    p.add_argument('-i', '--indicators', help="Parse & store the indicators (lli/ssi)?", action='store_true')
-    p.add_argument('-s', '--sufix', help='specify a sufix for desired observation files', type=str, default=None)
-    p.add_argument('--tlim', help='set time limints for the file to cenvert', nargs=2)
+    p.add_argument('folder', type = str)
+    p.add_argument('-odir', '--odir', help = 'Destination folder, if None-> the same as input folder', default = None)
+    p.add_argument('-f', '--force', help = "Force override, if the NC file already exist", action = 'store_true')
+    p.add_argument('-i', '--indicators', help = "Parse & store the indicators (lli/ssi)?", action = 'store_true')
+    p.add_argument('-s', '--sufix', help = 'specify a sufix for desired observation files', type = str, default = None)
+    p.add_argument('--tlim', help = 'set time limints for the file to cenvert', nargs = 2)
+    p.add_argument('--list', help = 'Recuced list of receivers (.yaml dict) to convert to .NC', type = str, default = None)
     P = p.parse_args()
     
     convertObs2HDF(folder = P.folder, sufix=P.sufix, odir=P.odir, override=P.force, 
-                   i=P.indicators, tlim=P.tlim)
+                   i=P.indicators, tlim=P.tlim, rxlist=P.list)
