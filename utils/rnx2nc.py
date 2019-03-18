@@ -8,20 +8,21 @@ Created on Tue Jul  4 13:25:38 2017
 import os
 import glob
 import platform
-from numpy import array, isin
+from numpy import array, isin, logical_not
 import yaml
 from time import sleep
 import georinex as gr
 from datetime import datetime
 
-def _convert(file, odir, i, tlim=None):
+def _convert(file, odir, i, tlim=None, fast=True, use = 'G'):
     try:
-        gr.load(file,out=odir, useindicators=i, fast=False, tlim=tlim)
+        gr.load(file,out=odir, useindicators=i, 
+                fast = fast, tlim=tlim, use = use)
     except Exception as e:
         print (e)
     sleep(0.1)
     
-def _iterate(file, odir, override, i, tlim=None):
+def _iterate(file, odir, override, i, tlim=None, use = 'G', fast = True):
     head, tail = os.path.split(file)
     rx = tail[0:8]
     if platform.system() == 'Linux':
@@ -30,12 +31,12 @@ def _iterate(file, odir, override, i, tlim=None):
         newfn = odir + '\\' + rx + '.nc'
     if not override:
         if not os.path.exists(newfn):
-            _convert(file, odir, i, tlim=tlim)
+            _convert(file, odir, i, tlim=tlim, fast=fast, use=use)
     else:
-        _convert(file, odir, i, tlim=tlim)
+        _convert(file, odir, i, tlim=tlim, fast=fast, use=use)
         
 def convertObs2HDF(folder=None, sufix=None, odir=None, override=False,
-                   i=False, tlim=None, rxlist = None):
+                   indicators=False, tlim=None, rxlist = None, use = 'G', fast = True):
     """
     This script converts RINEX 2.11 observation files in a given directory into
     a hdf5 organized data structure, utilizing pyRINEX script. Find the script
@@ -62,7 +63,7 @@ def convertObs2HDF(folder=None, sufix=None, odir=None, override=False,
         t0 = datetime.now()
         for i, file in enumerate(flist[idl]):
             print ('Converting: {}/{}'.format(i+1, flist[idl].shape[0]))
-            _iterate(file, odir, override, i, tlim=tlim)
+            _iterate(file, odir, override, indicators, tlim=tlim, fast=fast, use=use)
         t1 = datetime.now()
         print ('Conversion successfull. It took {}s to convert them, at an average of {} per file.'.format(t1-t0, (t1-t0)/flist[idl].shape[0]))
 
@@ -76,10 +77,10 @@ def convertObs2HDF(folder=None, sufix=None, odir=None, override=False,
                 filestr = os.path.join(folder,wlstr)
                 flist = sorted(glob.glob(filestr))
                 for file in flist:
-                    _iterate(file, odir, override, i, tlim=tlim)
+                    _iterate(file, odir, override, indicators, tlim=tlim, fast=fast, use=use)
         elif os.path.isfile(folder):
                 file = folder
-                _iterate(file, odir, override, i, tlim=tlim)
+                _iterate(file, odir, override, indicators, tlim=tlim, fast=fast, use=use)
         else:
             raise ("Something went wrong, dude")
 if __name__ == '__main__':
@@ -89,10 +90,12 @@ if __name__ == '__main__':
     p.add_argument('-odir', '--odir', help = 'Destination folder, if None-> the same as input folder', default = None)
     p.add_argument('-f', '--force', help = "Force override, if the NC file already exist", action = 'store_true')
     p.add_argument('-i', '--indicators', help = "Parse & store the indicators (lli/ssi)?", action = 'store_true')
+    p.add_argument('--fast', help = "Disable fast processing. Default == True", action = 'store_true')
     p.add_argument('-s', '--sufix', help = 'specify a sufix for desired observation files', type = str, default = None)
+    p.add_argument('--use', help = 'Use specific constallations only. Default == "G"', type = str, default = 'G')
     p.add_argument('--tlim', help = 'set time limints for the file to cenvert', nargs = 2)
     p.add_argument('--list', help = 'Recuced list of receivers (.yaml dict) to convert to .NC', type = str, default = None)
     P = p.parse_args()
     
     convertObs2HDF(folder = P.folder, sufix=P.sufix, odir=P.odir, override=P.force, 
-                   i=P.indicators, tlim=P.tlim, rxlist=P.list)
+                   indicators=P.indicators, tlim=P.tlim, rxlist=P.list, fast=logical_not(P.fast), use=P.use)
