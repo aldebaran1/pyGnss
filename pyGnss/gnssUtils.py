@@ -323,6 +323,7 @@ def RepairObs(D, idel, args = ['L1', 'L2', 'L5']):
             Lmeter = L * c0 / freq[arg[-1]]
             # Correct cycle slips
             if cycle_slip_idx.shape[0] > 0:
+                print ('{} Repair'.format(argc))
                 if arg == 'L1':
                     mask = np.isfinite(C)
                     x = np.arange(C.shape[0])
@@ -352,3 +353,54 @@ def RepairObs(D, idel, args = ['L1', 'L2', 'L5']):
         except:
             pass
     return obs
+
+def getPolynomOrder(interval, Ts, weights=[2,3,7,10]):
+    if isinstance(interval, list):
+        interval = np.array(interval)
+    lst_len = (interval[1] - interval[0]) * Ts / 60 # In minutes
+#    lst_len = interval.shape[0] * Ts / 60
+    if lst_len < 20:
+        polynom_order = weights[0]
+    elif lst_len >= 20 and lst_len < 50:
+        polynom_order = weights[1]
+    elif lst_len >= 50 and lst_len < 100:
+        polynom_order = weights[2]
+    elif lst_len >= 100:
+        polynom_order = weights[3]
+    return polynom_order
+
+def getIntervals(y, maxgap=1, maxjump=0.5):
+    r = np.array(range(len(y)))
+    idx = np.isfinite(y)
+    r = r[idx]
+    intervals=[]
+    if len(r)==0:
+        return intervals
+    beginning = 0
+    last = 0
+    for i in range(len(r)):
+        if (r[i]-r[last] > maxgap) or (abs(y[i] - y[last]) > maxjump):
+            intervals.append((r[beginning],r[last]))
+            beginning=i
+        last=i
+        if r[i]==r[-1]:
+            intervals.append([r[beginning],r[last]])
+            break
+    return intervals
+
+def getPlainResidual(tec, Ts=1, maxgap = 2, verbose = False):
+#    maxgap = 3600/Ts
+    intervals = getIntervals(tec, maxgap=maxgap, maxjump=1)
+    tecd = np.nan * np.ones(tec.shape[0])
+    for lst in intervals:
+        if lst[1]-lst[0] > 10:
+            polynom_order = getPolynomOrder(lst, Ts)
+            # PolynomialOrder
+#            print ('order = ', polynom_order)
+            tmp = phaseDetrend(tec[lst[0]:lst[1]], order=polynom_order)
+            if np.nanmax(abs(tmp)) < 3:
+                tecd[lst[0]:lst[1]] = tmp
+            else:
+                if verbose: print ('Something went wrong big time.')
+                pass
+    return tecd

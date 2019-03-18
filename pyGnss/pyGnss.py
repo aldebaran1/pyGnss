@@ -640,7 +640,7 @@ def phaseScintillation(data, fc=0.1, filt_order=6, polyfit_order=3, fs=1, skip=2
     L = np.nan*np.zeros(data.shape[0])
     idx = np.where(np.isfinite(data))[0]
     L1phi = data[idx]
-    L1_d = phaseDetrend(L1phi, polyfit_order)
+    L1_d = uf.phaseDetrend(L1phi, polyfit_order)
     Y = uf.hpf(L1_d, fc=fc, order=filt_order, fs=fs)
     
     L[idx[skip:]] = Y[skip:]
@@ -778,7 +778,7 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
         if arg[0] == 'L' or arg[0] == 'C':
             if arg == 'C1':
                 X = X * f1 / c0 # To cycles
-            Xd = phaseDetrend(X, order=porder)
+            Xd = uf.phaseDetrend(X, order=porder)
                 
             if polyfit:
                 # To dict
@@ -842,12 +842,15 @@ def dataFromNC(fnc,fnav,sv,
                datetime.timedelta(seconds = leap_seconds)
     rx_xyz = D.position
     aer = gpsSatPosition(fnav,dt,sv=sv, rx_position=rx_xyz, coords='aer')
-    idel = (aer[1] >= el_mask)
+    idel = (aer[1] >= el_mask - 10)
+    idelTrue = (aer[1] >= el_mask)
     aer = aer[:, idel]
     D['time'] = dt
     if satpos:
         D['az'] = aer[0]
         D['el'] = aer[1]
+        D['idelTrue'] = idelTrue
+        D['idel'] = idel
     if ipp:
         if ipp_alt is None:
             print ('Auto assigned altitude of the IPP: 250 km')
@@ -861,24 +864,29 @@ def dataFromNC(fnc,fnav,sv,
         D['ipp_lon'] = lla_vector[1]
         D['ipp_lat'] = lla_vector[0]
         D['ipp_alt'] = ipp_alt
-    return D, idel
+    return D
 
-def processTEC(obs, sv, frequency = 2, H=None,elevation=None):
-    stec = slantTEC(obs['C1'], obs['P2'], 
-                           obs['L1'], obs['L2'], frequency = frequency)
-#    stec += satbias[sv]
+def processTEC(obs, sv, Ts = 30, frequency = 2, H=None, elevation=None, sat_bias=None):
+    if isinstance(obs, dict):
+        stec = slantTEC(obs['C1'], obs['P2'], 
+                        obs['L1'], obs['L2'], 
+                        frequency = frequency)
+    elif isinstance(obs, xarray.Dataset):
+        stec = slantTEC(obs['C1'].values, obs['P2'].values, 
+                        obs['L1'].values, obs['L2'].values, 
+                        frequency = frequency)
+    if sat_bias is not None:
+        stec += sat_bias
     assert elevation is not None
     assert H is not None
     F = getMappingFunction(elevation, h = H)
     vtec = stec * F
-    tecd = uf.phaseDetrend(vtec, order=12)
-    x = np.arange(tecd.shape[0])
-    mask= np.isnan(tecd)
-    tecdp = np.copy(tecd)
-    tecdp[:15] = np.nan
-    tecdp[mask] = np.interp(x[mask], x[~mask], tecd[~mask])
-    tecps = uf.hpf(tecdp)
-    tecps[:15] = np.nan
+    tecd = uf.getPlainResidual(vtec, Ts=Ts)
+#    x = np.arange(tecd.shape[0])
+#    mask= np.isnan(tecd)
+#    tecdp = np.copy(tecd)
+#    tecdp[mask] = np.interp(x[mask], x[~mask], tecd[~mask])
+#    tecps = uf.hpf(tecdp)
     
-    return vtec, tecdp, tecps
+    return vtec, tecd
     
