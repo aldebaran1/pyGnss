@@ -22,18 +22,18 @@ def _convert(file, odir, i, tlim=None, fast=True, use = 'G'):
         print (e)
     sleep(0.1)
     
-def _iterate(file, odir, override, i, tlim=None, use = 'G', fast = True):
-    head, tail = os.path.split(file)
-    rx = tail[0:8]
-    if platform.system() == 'Linux':
-        newfn = odir + '/' + rx + '.nc'
-    elif platform.system() == 'Windows':
-        newfn = odir + '\\' + rx + '.nc'
+def _iterate(file, odir, override, indicators, tlim=None, use = 'G', fast = True):
+    tail = os.path.split(file)[1]
+    newfn = file + '.nc'
     if not override:
         if not os.path.exists(newfn):
-            _convert(file, odir, i, tlim=tlim, fast=fast, use=use)
+            print ('Converting: {}'.format(tail))
+            _convert(file, odir, indicators, tlim=tlim, fast=fast, use=use)
+        else:
+            print ("{} already exists.".format(os.path.split(newfn)[1]))
     else:
-        _convert(file, odir, i, tlim=tlim, fast=fast, use=use)
+        print ('Converting: {}'.format(tail))
+        _convert(file, odir, indicators, tlim=tlim, fast=fast, use=use)
         
 def convertObs2HDF(folder=None, sufix=None, odir=None, override=False,
                    indicators=False, tlim=None, rxlist = None, use = 'G', fast = True):
@@ -61,9 +61,10 @@ def convertObs2HDF(folder=None, sufix=None, odir=None, override=False,
         fnamelist = array([os.path.split(r)[1][:4] for r in flist])
         idl = isin(fnamelist, rxl)
         t0 = datetime.now()
+        print (override)
         for i, file in enumerate(flist[idl]):
-            print ('Converting: {}/{}'.format(i+1, flist[idl].shape[0]))
-            _iterate(file, odir, override, indicators, tlim=tlim, fast=fast, use=use)
+            _iterate(file, odir, override=override, indicators=indicators, 
+                     tlim=tlim, fast=fast, use=use)
         t1 = datetime.now()
         print ('Conversion successfull. It took {}s to convert them, at an average of {} per file.'.format(t1-t0, (t1-t0)/flist[idl].shape[0]))
 
