@@ -8,3 +8,4 @@ from .io import * # noqa: F401
 from .tec import * # noqa: F401
 from .pyGnss import * # noqa: F401
 from .gnssUtils import * # noqa: F401
+from .dm import keogram, getNeighbours # noqa: F401
