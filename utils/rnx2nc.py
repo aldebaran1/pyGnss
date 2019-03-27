@@ -7,7 +7,7 @@ Created on Tue Jul  4 13:25:38 2017
 """
 import os
 import glob
-import platform
+#import platform
 from numpy import array, isin, logical_not
 import yaml
 from time import sleep
@@ -16,7 +16,7 @@ from datetime import datetime
 
 def _convert(file, odir, i, tlim=None, fast=True, use = 'G'):
     try:
-        gr.load(file,out=odir, useindicators=i, 
+        gr.load(file, out = odir, useindicators = i,
                 fast = fast, tlim=tlim, use = use)
     except Exception as e:
         print (e)

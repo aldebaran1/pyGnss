@@ -184,7 +184,7 @@ def getTimeSeries(time: Union[list, np.ndarray] = None,
         raise ('Invalid shape for xgrid')
         
     if intsize < 1:
-        timeseries = imarray[:][idX][idY]
+        timeseries = imarray[:,idX,idY]
     else:
         timeseries = np.nan * np.ones(time.shape[0], dtype=np.float16)
         for i in range(time.shape[0]):
