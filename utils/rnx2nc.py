@@ -61,7 +61,6 @@ def convertObs2HDF(folder=None, sufix=None, odir=None, override=False,
         fnamelist = array([os.path.split(r)[1][:4] for r in flist])
         idl = isin(fnamelist, rxl)
         t0 = datetime.now()
-        print (override)
         for i, file in enumerate(flist[idl]):
             _iterate(file, odir, override=override, indicators=indicators, 
                      tlim=tlim, fast=fast, use=use)

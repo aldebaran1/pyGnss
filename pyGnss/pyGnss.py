@@ -834,10 +834,14 @@ def dataFromNC(fnc,fnav,sv,
                ipp_alt=None):
     leap_seconds = uf.getLeapSeconds(fnav)
     D = gr.load(fnc, useindicators=True).sel(sv=sv)
+#    if isinstance(D.time[0], str):
+    D['time'] = np.array([np.datetime64(ttt) for ttt in D.time.values])
     if tlim is not None:
         if len(tlim) == 2:
-            D = D.where(np.logical_and(D.time >= np.datetime64(tlim[0]), D.time <= np.datetime64(tlim[1])), drop=True)
+            D = D.where(np.logical_and(D.time >= np.datetime64(tlim[0]), 
+                                       D.time <= np.datetime64(tlim[1])), drop=True)
     obstimes64 = D.time.values
+    
     dt = np.array([Timestamp(t).to_pydatetime() for t in obstimes64]) - \
                datetime.timedelta(seconds = leap_seconds)
     rx_xyz = D.position

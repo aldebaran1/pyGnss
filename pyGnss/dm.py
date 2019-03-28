@@ -7,6 +7,8 @@ Created on Wed Mar 27 10:34:49 2019
 """
 
 import numpy as np
+from scipy import signal
+from datetime import datetime, timedelta
 from typing import Union
 from scipy import ndimage
 import matplotlib.pyplot as plt
@@ -61,20 +63,24 @@ def keogram(time: np.ndarray=None,
     if tlim is not None:
         if isinstance(tlim, list):
             assert len(tlim) == 2
+        elif isinstance(tlim, datetime):
+            tlim = [tlim, tlim]
         else:
-            assert tlim.shape[0] == 2
-        assert type(tlim[0]) == type(time)
+            raise ('Something went wrong in treq indexing')
         idT = (time >= tlim[0]) & (time <= tlim[1])
         time = time[idT]
         im = im[idT]
     # Time dimension
-    tlen = time.shape[0]
+    if isinstance(time, (list, np.ndarray)):
+        tlen = time.shape[0]
+    else:
+        tlen = 1
     # Filter in space
     if isinstance(Xt, (int, float)):
         idX = (xgrid >= Xt) & (xgrid <= Xt)
     elif isinstance(Xt, (list, np.ndarray)):
         idX = (xgrid >= Xt.min()) & (xgrid <= Xt.max())
-    if isinstance(Yt, (int, float)):
+    if isinstance(Yt, (int, float, np.int64)):
         idY = (ygrid >= Yt) & (ygrid <= Yt)
     elif isinstance(Yt, (list, np.ndarray)):
         idY = (ygrid >= Yt.min()) & (ygrid <= Yt.max())
@@ -92,10 +98,12 @@ def keogram(time: np.ndarray=None,
         Yaxis = Y[mask]
     else:
         Yaxis = X[mask]
-    
-    imlen = im[0][mask].shape[0]
-    
+    if len(im.shape) == 3:
+        imlen = im[0][mask].shape[0]
+    else:
+        imlen = im[mask].shape[0]
     keo = np.nan * np.ones((tlen, imlen))
+    
     for ii,img in enumerate(im):
         tmp = img[mask]
         if Xn < 1 and Yn < 1:
@@ -192,3 +200,21 @@ def getTimeSeries(time: Union[list, np.ndarray] = None,
             timeseries[i] = np.nanmean(cluster)
     
     return {'t': time, 'y': timeseries}
+
+def tdft(t,y,T=30,nfft=1024,Nw=240,Nskip=1,window='hamming'):
+    Wn = signal.get_window(window,Nw)
+    f = np.fft.fftfreq(nfft,d=T) * 1e3 # to mHz
+    f = f[1:int(nfft/2)]
+    
+    Treducted = t[:-Nw]
+    Tspecto = Treducted[::Nskip] + timedelta(seconds=Nw/2*T)
+    
+    for i in np.arange(0,y.shape[0]-Nw,Nskip):
+        Stmp = np.fft.fft(y[i:i+Nw]*Wn,n=nfft)
+        Sx1 = abs(Stmp[1:int(nfft/2)])**2
+        if i == 0:
+            Sx = Sx1
+        else:
+            Sx = np.vstack((Sx,Sx1))
+            
+    return Tspecto, f, Sx
