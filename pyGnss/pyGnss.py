@@ -423,8 +423,8 @@ def getMappingFunction(el, h):
     
     Re = 6371.0
     rc1 = (Re / (Re + h))
-#    F = np.cos(np.arcsin(rc1*np.cos(np.radians(el))))
-    F = np.sqrt(1 - (np.cos(np.radians(el))**2 * rc1**2))
+    F = np.cos(np.arcsin(rc1*np.cos(np.radians(el))))
+#    F = np.sqrt(1 - (np.cos(np.radians(el))**2 * rc1**2))
     return np.array(F)
 
 def gloSatPosition(navfn, sv, obstimes, rx_position=None, cs='xyz'):
@@ -871,14 +871,15 @@ def dataFromNC(fnc,fnav,sv,
                datetime.timedelta(seconds = leap_seconds)
     rx_xyz = D.position
     aer = gpsSatPosition(fnav,dt,sv=sv, rx_position=rx_xyz, coords='aer')
-    idel = (aer[1] >= el_mask - 10)
-    idelTrue = (aer[1] >= el_mask)
-    aer = aer[:, idel]
+    idel = (aer[1] >= el_mask)
+#    idelTrue = (aer[1] >= el_mask)
+#    aer = aer[:, idel]
+    aer[:,~idel] = np.nan
     D['time'] = dt
     if satpos:
         D['az'] = aer[0]
         D['el'] = aer[1]
-        D['idelTrue'] = idelTrue
+#        D['idelTrue'] = idelTrue
         D['idel'] = idel
     if ipp:
         if ipp_alt is None:
@@ -917,5 +918,5 @@ def processTEC(obs, sv, Ts = 30, frequency = 2, H=None, elevation=None, sat_bias
 #    tecdp[mask] = np.interp(x[mask], x[~mask], tecd[~mask])
 #    tecps = uf.hpf(tecdp)
     
-    return vtec, tecd
+    return vtec, tecd, F
     
