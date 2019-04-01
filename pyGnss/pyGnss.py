@@ -6,6 +6,7 @@ Created on Sat Oct 15 17:28:01 2016
 smrak@bu.edu
 """
 import numpy as np
+from datetime import timedelta
 from scipy import interpolate
 from pandas import DataFrame
 from pymap3d import ecef2geodetic,ecef2aer,aer2geodetic
@@ -14,7 +15,7 @@ import xarray
 import datetime
 import matplotlib.pyplot as plt
 from pandas import Timestamp
-from pyRinex import pyRinex
+#from pyRinex import pyRinex
 import georinex as gr
 from pyGnss import gnssUtils as uf
 from glob import glob
@@ -341,36 +342,38 @@ def gpsSatPosition(fnav, dt, sv=None, rx_position=None, coords='xyz'):
         return np.array([A,E,R])
 
 #%% Sat positioning 
-def getSatellitePosition(rx_xyz,sv,obstimes,navfn,cs='wsg84', navdict=False,
-                         dtype='pyrinex'):
-    """
-    Sebastijan Mrak
-    Function returns satellite position in AER and LLA coordinates for a chosen
-    satellite vehicle and obseravtion times. Rx_xyz is a receiver position in 
-    ECEF CS, as an np. array. Obstimes gat to be in format pandas.to_datetime
-    """
-
-    rec_lat, rec_lon, rec_alt = ecef2geodetic(rx_xyz[0], rx_xyz[1], rx_xyz[2])
-    if dtype == 'pyrinex':
-        navdata = pyRinex.readRinexNav(navfn)
-        xyz = getSatXYZ(navdata, sv, obstimes)
-    elif dtype == 'georinex':
-        navdata = gr.load(navfn).sel(sv=sv)
-        xyz = getSatXYZ2(navdata, obstimes)
-    az, el, r = ecef2aer(xyz[:,0],xyz[:,1],xyz[:,2],rec_lat, rec_lon, rec_alt)
-    lat, lon, alt = ecef2geodetic(xyz[:,0],xyz[:,1],xyz[:,2])
-    
-    if cs == 'wsg84':
-        return [lat, lon, alt]
-    elif cs == 'aer':
-        return [az, el, r]
-    elif cs == 'xyz':
-        return [xyz[:,0], xyz[:,1], xyz[:,2]]
-    else:
-        print ('Wrong frame of reference. Type "wsg84" or "aer".')
-        return 0;
-    
-def getIonosphericPiercingPoints(rx_xyz,sv,obstimes,ipp_alt, navfn,cs='wsg84',sattype='G'):
+#def getSatellitePosition(rx_xyz,sv,obstimes,navfn,cs='wsg84', navdict=False,
+#                         dtype='pyrinex'):
+#    """
+#    Sebastijan Mrak
+#    Function returns satellite position in AER and LLA coordinates for a chosen
+#    satellite vehicle and obseravtion times. Rx_xyz is a receiver position in 
+#    ECEF CS, as an np. array. Obstimes gat to be in format pandas.to_datetime
+#    """
+#
+#    rec_lat, rec_lon, rec_alt = ecef2geodetic(rx_xyz[0], rx_xyz[1], rx_xyz[2])
+#    if dtype == 'pyrinex':
+#        return
+##        navdata = pyRinex.readRinexNav(navfn)
+##        xyz = getSatXYZ(navdata, sv, obstimes)
+#    elif dtype == 'georinex':
+#        navdata = gr.load(navfn).sel(sv=sv)
+#        xyz = getSatXYZ2(navdata, obstimes)
+#    az, el, r = ecef2aer(xyz[:,0],xyz[:,1],xyz[:,2],rec_lat, rec_lon, rec_alt)
+#    lat, lon, alt = ecef2geodetic(xyz[:,0],xyz[:,1],xyz[:,2])
+#    
+#    if cs == 'wsg84':
+#        return [lat, lon, alt]
+#    elif cs == 'aer':
+#        return [az, el, r]
+#    elif cs == 'xyz':
+#        return [xyz[:,0], xyz[:,1], xyz[:,2]]
+#    else:
+#        print ('Wrong frame of reference. Type "wsg84" or "aer".')
+#        return 0;
+##    
+def getIonosphericPiercingPoints(rx_xyz,sv,obstimes,ipp_alt, navfn,
+                                 cs='wsg84', rx_xyz_coords='xyz'):
     """
     Sebastijan Mrak
     Function returns a list of Ionospheric Piersing Point (IPP) trajectory in WSG84
@@ -381,12 +384,16 @@ def getIonosphericPiercingPoints(rx_xyz,sv,obstimes,ipp_alt, navfn,cs='wsg84',sa
     """
     
     ipp_alt = ipp_alt * 1E3
-    rec_lat, rec_lon, rec_alt = ecef2geodetic(rx_xyz[0], rx_xyz[1], rx_xyz[2])
+    if rx_xyz_coords == 'xyz':
+        rec_lat, rec_lon, rec_alt = ecef2geodetic(rx_xyz[0], rx_xyz[1], rx_xyz[2])
+    else:
+        rec_lon = rx_xyz[0]
+        rec_lat = rx_xyz[1]
+        rec_alt = rx_xyz[2]
     
-    if sattype == 'G':
-        navdata = pyRinex.readRinexNav(navfn)
-        xyz = getSatXYZ(navdata, sv, obstimes)
-        az,el,r = ecef2aer(xyz[:,0],xyz[:,1],xyz[:,2],rec_lat, rec_lon, rec_alt)
+    if sv[0] == 'G':
+        xyz = gpsSatPosition(navfn, obstimes, sv=sv, rx_position=rx_xyz, coords='xyz')
+        az,el,r = ecef2aer(xyz[0,:],xyz[1,:],xyz[2,:],rec_lat, rec_lon, rec_alt)
         aer_vector = np.array([az, el, r])
         r_new = []
         for i in range(len(el)):
@@ -397,31 +404,13 @@ def getIonosphericPiercingPoints(rx_xyz,sv,obstimes,ipp_alt, navfn,cs='wsg84',sa
                 r_new.append(np.nan)
         lla_vector = np.array(aer2geodetic(az, el, r_new, rec_lat, rec_lon, rec_alt))
         
-    elif sattype == 'R':
-        f = h5py.File(navfn, 'r')
-        sat_xyz = np.array(f[str(sv)+'/data'])[:,0:3]
-        sat_time = np.array(f[str(sv)+'/obstimes'])
-        az, el, r = ecef2aer(sat_xyz[:,0]*1E3, sat_xyz[:,1]*1E3, sat_xyz[:,2]*1E3, rec_lat, rec_lon, rec_alt)
-        t = uf.datetime2posix(obstimes)
-        y_out = []
-        
-        for y in [az, el, r]:
-            x_new = t
-            f = interpolate.interp1d(sat_time,y,kind='cubic')
-            y_new = f(x_new)
-            y_out.append(y_new)
-        aer_vector = np.array(y_out)
-        
-        r_new = [] 
-        for i in range(y_out.shape[1]):
-            if y_out[1, i] > 0:
-                fm = np.sin(np.radians(y_out[1,i]))
-                r_new.append(ipp_alt / fm)
-            else:
-                r_new.append(np.nan)
-        lla_vector = np.array(aer2geodetic(y_out[0,:], y_out[1,:], r_new, rec_lat, rec_lon, rec_alt))
+    elif sv[0] == 'R':
+        aer_vector = gloSatPosition(navfn=navfn, sv=sv, obstimes=obstimes, rx_position=[rec_lon, rec_lat, rec_alt], cs='aer')
+        fm = np.sin(np.radians(aer_vector[1]))
+        r_new = ipp_alt / fm
+        lla_vector = np.array(aer2geodetic(aer_vector[0], aer_vector[1], r_new, rec_lat, rec_lon, rec_alt))
     else:
-        print ('Type in valid sattype initial. "G" for GPS and "R" for glonass')
+        print ('Type in valid sattype initial. "G" for GPS and "R" for GLONASS')
         
     if (cs == 'wsg84'):
         return lla_vector
@@ -437,177 +426,213 @@ def getMappingFunction(el, h):
 #    F = np.cos(np.arcsin(rc1*np.cos(np.radians(el))))
     F = np.sqrt(1 - (np.cos(np.radians(el))**2 * rc1**2))
     return np.array(F)
+
+def gloSatPosition(navfn, sv, obstimes, rx_position=None, cs='xyz'):
+    obstimes = obstimes.astype('datetime64[s]')
+    D = gr.load(navfn).sel(sv = sv)
+    navtimes = D.time.values.astype('datetime64[s]')
+    x = D.X.values * 1e3
+    y = D.Y.values * 1e3
+    z = D.Z.values * 1e3
+    # Rearange
+#    deltaTin = np.diff(obstimes)[0]
+    tmin = min(obstimes.min(), navtimes.min())
+    tmax = max(obstimes.max(), navtimes.max())
+    navtimes_interp = np.arange(tmin, tmax + 1, 
+                                timedelta(seconds = 1)).astype('datetime64[s]') #deltaTin.item().total_seconds())).astype('datetime64[s]')
+    x0 = np.linspace(0, 1, navtimes.shape[0])
+    x1 = np.linspace(0, 1, navtimes_interp.shape[0])
+    Xi = np.interp(x1, x0, x)
+    Yi = np.interp(x1, x0, y)
+    Zi = np.interp(x1, x0, z)
+#    if isinstance(obstimes, (np.ndarray)):
+    idt = np.isin(navtimes_interp, obstimes)#(navtimes_interp >= obstimes[0]) & (navtimes_interp <= obstimes[-1])
+    
+    if cs == 'xyz':
+        xyz = np.array([Xi[idt], Yi[idt], Zi[idt]])
+        return xyz
+    elif cs == 'aer':
+        assert rx_position is not None
+        if isinstance(rx_position, list): rx_position = np.array(rx_position)
+        assert rx_position.shape[0] == 3
+        aer = ecef2aer(Xi[idt],Yi[idt],Zi[idt],
+                       lon0 = rx_position[0], lat0 = rx_position[1],
+                       h0 = rx_position[2])
+        return aer
+    else:
+        return
+    
 # %%
-def getSatXYZ(nav, sv, times):
-    """
-    Greg Starr
-    getSatelliteXYZ returns the satellite XYZ as a tuple at the inputted times
-    inputs are rinex navigation data, satellite number, and list of times
-    Output: tuple of satellite position in ECEF coordinates (X,Y,Z)
-    Algorithm: Based on http://web.ics.purdue.edu/~ecalais/teaching/geodesy/EAS_591T_2003_lab_4.htm
-    also based on Bill Rideout's tec.py
-    """
-    allSvInfo = nav[nav['sv']==sv] 
-    
-    timesarray = np.asarray(times,dtype='datetime64[ms]')
-    navtimes = np.asarray(allSvInfo.index,dtype='datetime64[ms]')
-    bestephind = np.array([np.argmin(abs(navtimes-t)) for t in timesarray])
-    info = np.asarray(allSvInfo)[bestephind]
-    info = DataFrame(info,index=times,columns=allSvInfo.columns)
-    info['sv'] = sv
-    info['gpstime'] = np.array([getGpsTime(t) for t in times])
-    
-    # constants
-    GM = 3986005.0E8 # universal gravational constant
-    OeDOT = 7.2921151467E-5
-    
-    #Basic Parameters
-    t = info['gpstime']-info['TimeEph']
-    mu = info['M0']+t*(np.sqrt(GM/info['sqrtA']**6)+info['DeltaN'])
-    Ek = solveIter(mu,info['Eccentricity'])  
-    Vk = np.asarray(np.arctan2(np.sqrt(1.0-info['Eccentricity']**2)*np.sin(Ek),
-                               np.cos(Ek)-info['Eccentricity']),float)
-    PhiK = Vk + info['omega']
-    #Correct for orbital perturbations
-    omega = np.asarray(info['omega']+info['Cus']*np.sin(2.0*PhiK)
-             +info['Cuc']*np.cos(2.0*PhiK),float)
-    r = np.asarray((info['sqrtA']**2)*(1.0-info['Eccentricity']*np.cos(Ek))
-         +info['Crs']*np.sin(2.0*PhiK)+info['Crc']*np.cos(2.0*PhiK),float)
-    i = np.asarray(info['Io']+info['IDOT']*t+info['CIS']*np.sin(2.0*PhiK)
-         +info['Cic']*np.cos(2.0*PhiK),float)
-    
-    #Compute the right ascension
-    Omega = np.asarray(info['OMEGA']+(info['OMEGA DOT']-OeDOT)*t-
-        (OeDOT*info['TimeEph']),float)
-    #Convert satellite position from orbital frame to ECEF frame
-    cosOmega = np.cos(Omega)
-    sinOmega = np.sin(Omega)
-    cosomega = np.cos(omega)
-    sinomega = np.sin(omega)
-    cosi = np.cos(i)
-    sini = np.sin(i)
-    cosVk = np.cos(Vk)
-    sinVk = np.sin(Vk)
-    R11 = cosOmega*cosomega - sinOmega*sinomega*cosi
-    R12 = -1.0*cosOmega*sinomega - sinOmega*cosomega*cosi
-    #R13 = np.sin(Omega)*np.sin(i)
-    R21 = sinOmega*cosomega + cosOmega*sinomega*cosi
-    R22 = -1.0*sinOmega*sinomega + cosOmega*cosomega*cosi
-    #R23 = -1.0*np.cos(Omega)*np.sin(i)
-    R31 = sinomega*sini
-    R32 = cosomega*sini
-    #R33 = np.cos(i)
-          
-    xyz = np.zeros((len(times),3))
-    rv = np.column_stack((r*cosVk,r*sinVk,np.zeros(r.shape)))
-    
-    R = np.empty((rv.shape[0],3,3))
-    R[:,0,0] = R11
-    R[:,0,1] = R12
-    R[:,0,2] = 0
-    R[:,1,0] = R21
-    R[:,1,1] = R22
-    R[:,1,2] = 0
-    R[:,2,0] = R31
-    R[:,2,1] = R32
-    R[:,2,2] = 0
-    
-
-    for i in range(len(times)): #THIS IS THE SLOWEST PART NOW
-        xyz[i,:] = (R[i,:,:].dot(rv[i,:]))
-        
-    return xyz
+#def getSatXYZ(nav, sv, times):
+#    """
+#    Greg Starr
+#    getSatelliteXYZ returns the satellite XYZ as a tuple at the inputted times
+#    inputs are rinex navigation data, satellite number, and list of times
+#    Output: tuple of satellite position in ECEF coordinates (X,Y,Z)
+#    Algorithm: Based on http://web.ics.purdue.edu/~ecalais/teaching/geodesy/EAS_591T_2003_lab_4.htm
+#    also based on Bill Rideout's tec.py
+#    """
+#    allSvInfo = nav[nav['sv']==sv] 
+#    
+#    timesarray = np.asarray(times,dtype='datetime64[ms]')
+#    navtimes = np.asarray(allSvInfo.index,dtype='datetime64[ms]')
+#    bestephind = np.array([np.argmin(abs(navtimes-t)) for t in timesarray])
+#    info = np.asarray(allSvInfo)[bestephind]
+#    info = DataFrame(info,index=times,columns=allSvInfo.columns)
+#    info['sv'] = sv
+#    info['gpstime'] = np.array([getGpsTime(t) for t in times])
+#    
+#    # constants
+#    GM = 3986005.0E8 # universal gravational constant
+#    OeDOT = 7.2921151467E-5
+#    
+#    #Basic Parameters
+#    t = info['gpstime']-info['TimeEph']
+#    mu = info['M0']+t*(np.sqrt(GM/info['sqrtA']**6)+info['DeltaN'])
+#    Ek = solveIter(mu,info['Eccentricity'])  
+#    Vk = np.asarray(np.arctan2(np.sqrt(1.0-info['Eccentricity']**2)*np.sin(Ek),
+#                               np.cos(Ek)-info['Eccentricity']),float)
+#    PhiK = Vk + info['omega']
+#    #Correct for orbital perturbations
+#    omega = np.asarray(info['omega']+info['Cus']*np.sin(2.0*PhiK)
+#             +info['Cuc']*np.cos(2.0*PhiK),float)
+#    r = np.asarray((info['sqrtA']**2)*(1.0-info['Eccentricity']*np.cos(Ek))
+#         +info['Crs']*np.sin(2.0*PhiK)+info['Crc']*np.cos(2.0*PhiK),float)
+#    i = np.asarray(info['Io']+info['IDOT']*t+info['CIS']*np.sin(2.0*PhiK)
+#         +info['Cic']*np.cos(2.0*PhiK),float)
+#    
+#    #Compute the right ascension
+#    Omega = np.asarray(info['OMEGA']+(info['OMEGA DOT']-OeDOT)*t-
+#        (OeDOT*info['TimeEph']),float)
+#    #Convert satellite position from orbital frame to ECEF frame
+#    cosOmega = np.cos(Omega)
+#    sinOmega = np.sin(Omega)
+#    cosomega = np.cos(omega)
+#    sinomega = np.sin(omega)
+#    cosi = np.cos(i)
+#    sini = np.sin(i)
+#    cosVk = np.cos(Vk)
+#    sinVk = np.sin(Vk)
+#    R11 = cosOmega*cosomega - sinOmega*sinomega*cosi
+#    R12 = -1.0*cosOmega*sinomega - sinOmega*cosomega*cosi
+#    #R13 = np.sin(Omega)*np.sin(i)
+#    R21 = sinOmega*cosomega + cosOmega*sinomega*cosi
+#    R22 = -1.0*sinOmega*sinomega + cosOmega*cosomega*cosi
+#    #R23 = -1.0*np.cos(Omega)*np.sin(i)
+#    R31 = sinomega*sini
+#    R32 = cosomega*sini
+#    #R33 = np.cos(i)
+#          
+#    xyz = np.zeros((len(times),3))
+#    rv = np.column_stack((r*cosVk,r*sinVk,np.zeros(r.shape)))
+#    
+#    R = np.empty((rv.shape[0],3,3))
+#    R[:,0,0] = R11
+#    R[:,0,1] = R12
+#    R[:,0,2] = 0
+#    R[:,1,0] = R21
+#    R[:,1,1] = R22
+#    R[:,1,2] = 0
+#    R[:,2,0] = R31
+#    R[:,2,1] = R32
+#    R[:,2,2] = 0
+#    
+#
+#    for i in range(len(times)): #THIS IS THE SLOWEST PART NOW
+#        xyz[i,:] = (R[i,:,:].dot(rv[i,:]))
+#        
+#    return xyz
 # %% GeoRinex NAV file access and processing
-def getSatXYZ2(info, times):
-    """
-    Greg Starr
-    getSatelliteXYZ returns the satellite XYZ as a tuple at the inputted times
-    inputs are rinex navigation data, satellite number, and list of times
-    Output: tuple of satellite position in ECEF coordinates (X,Y,Z)
-    Algorithm: Based on http://web.ics.purdue.edu/~ecalais/teaching/geodesy/EAS_591T_2003_lab_4.htm
-    also based on Bill Rideout's tec.py
-    
-    Update:
-    nav == xarray from georinex = gr.load(brdc.**n)
-    """    
-    # Input argument: 'times' [datetime.datetime]
-    timesarray = np.asarray(times,dtype='datetime64[ns]') #[datetime64 [ns]]
-    # Manipulate with times, epochs and crap like this
-    navtimes = info.time.values # [datetime64 [ns]]
-    idnan = np.isfinite(info['Toe'].values)
-    bestephind = np.array([np.argmin(abs(navtimes[idnan]-t)) for t in timesarray])
-    gpstime = np.array([getGpsTime(t) for t in times])
-    t = gpstime - info['Toe'][idnan][bestephind].values # [datetime.datetime]
-    # constants
-    GM = 3986005.0E8 # universal gravational constant
-    OeDOT = 7.2921151467E-5
-    ##################3 REPLACEMENT ###########################################
-    # Basic parameters
-    ecc = info['Eccentricity'][idnan][bestephind].values # Eccentricity
-    mu = info['M0'][idnan][bestephind].values + \
-             t *(np.sqrt(GM / info['sqrtA'][idnan][bestephind].values**6) + 
-             info['DeltaN'][idnan][bestephind].values)
-    Ek = solveIter(mu,ecc)
-    Vk = np.asarray(np.arctan2(np.sqrt(1.0 - ecc**2) * np.sin(Ek),
-                               np.cos(Ek) - ecc), float)
-    PhiK = Vk + info['omega'][idnan][bestephind].values
-    
-    #Correct for orbital perturbations
-    omega = np.asarray(info['omega'][idnan][bestephind].values + 
-                       info['Cus'][idnan][bestephind].values * np.sin(2.0*PhiK) + 
-                       info['Cuc'][idnan][bestephind].values * np.cos(2.0*PhiK), float)
-    r = np.asarray((info['sqrtA'][idnan][bestephind].values**2) * 
-                   (1.0 - ecc * np.cos(Ek)) + info['Crs'][idnan][bestephind].values * 
-                   np.sin(2.0*PhiK) + info['Crc'][idnan][bestephind].values * 
-                   np.cos(2.0*PhiK), float)
-    i = np.asarray(info['Io'][idnan][bestephind].values + 
-                   info['IDOT'][idnan][bestephind].values * t + 
-                   info['Cis'][idnan][bestephind].values * np.sin(2.0*PhiK) + 
-                   info['Cic'][idnan][bestephind].values * np.cos(2.0*PhiK), float)
-    
-    #Compute the right ascension
-    Omega = np.asarray(info['Omega0'][idnan][bestephind].values + 
-                       (info['OmegaDot'][idnan][bestephind].values - OeDOT) * t -
-                       (OeDOT * info['Toe'][idnan][bestephind].values), float)
-    ###########################################################################
-    #Convert satellite position from orbital frame to ECEF frame
-    cosOmega = np.cos(Omega)
-    sinOmega = np.sin(Omega)
-    cosomega = np.cos(omega)
-    sinomega = np.sin(omega)
-    cosi = np.cos(i)
-    sini = np.sin(i)
-    cosVk = np.cos(Vk)
-    sinVk = np.sin(Vk)
-    R11 = cosOmega*cosomega - sinOmega*sinomega*cosi
-    R12 = -1.0*cosOmega*sinomega - sinOmega*cosomega*cosi
-    #R13 = np.sin(Omega)*np.sin(i)
-    R21 = sinOmega*cosomega + cosOmega*sinomega*cosi
-    R22 = -1.0*sinOmega*sinomega + cosOmega*cosomega*cosi
-    #R23 = -1.0*np.cos(Omega)*np.sin(i)
-    R31 = sinomega*sini
-    R32 = cosomega*sini
-    #R33 = np.cos(i)
-          
-    xyz = np.zeros((len(times),3))
-    rv = np.column_stack((r*cosVk,r*sinVk,np.zeros(r.shape)))
-    
-    R = np.empty((rv.shape[0],3,3))
-    R[:,0,0] = R11
-    R[:,0,1] = R12
-    R[:,0,2] = 0
-    R[:,1,0] = R21
-    R[:,1,1] = R22
-    R[:,1,2] = 0
-    R[:,2,0] = R31
-    R[:,2,1] = R32
-    R[:,2,2] = 0
-    
-
-    for i in range(len(times)): #THIS IS THE SLOWEST PART NOW
-        xyz[i,:] = (R[i,:,:].dot(rv[i,:]))
-        
-    return xyz
+#def getSatXYZ2(info, times):
+#    """
+#    Greg Starr
+#    getSatelliteXYZ returns the satellite XYZ as a tuple at the inputted times
+#    inputs are rinex navigation data, satellite number, and list of times
+#    Output: tuple of satellite position in ECEF coordinates (X,Y,Z)
+#    Algorithm: Based on http://web.ics.purdue.edu/~ecalais/teaching/geodesy/EAS_591T_2003_lab_4.htm
+#    also based on Bill Rideout's tec.py
+#    
+#    Update:
+#    nav == xarray from georinex = gr.load(brdc.**n)
+#    """    
+#    # Input argument: 'times' [datetime.datetime]
+#    timesarray = np.asarray(times,dtype='datetime64[ns]') #[datetime64 [ns]]
+#    # Manipulate with times, epochs and crap like this
+#    navtimes = info.time.values # [datetime64 [ns]]
+#    idnan = np.isfinite(info['Toe'].values)
+#    bestephind = np.array([np.argmin(abs(navtimes[idnan]-t)) for t in timesarray])
+#    gpstime = np.array([getGpsTime(t) for t in times])
+#    t = gpstime - info['Toe'][idnan][bestephind].values # [datetime.datetime]
+#    # constants
+#    GM = 3986005.0E8 # universal gravational constant
+#    OeDOT = 7.2921151467E-5
+#    ##################3 REPLACEMENT ###########################################
+#    # Basic parameters
+#    ecc = info['Eccentricity'][idnan][bestephind].values # Eccentricity
+#    mu = info['M0'][idnan][bestephind].values + \
+#             t *(np.sqrt(GM / info['sqrtA'][idnan][bestephind].values**6) + 
+#             info['DeltaN'][idnan][bestephind].values)
+#    Ek = solveIter(mu,ecc)
+#    Vk = np.asarray(np.arctan2(np.sqrt(1.0 - ecc**2) * np.sin(Ek),
+#                               np.cos(Ek) - ecc), float)
+#    PhiK = Vk + info['omega'][idnan][bestephind].values
+#    
+#    #Correct for orbital perturbations
+#    omega = np.asarray(info['omega'][idnan][bestephind].values + 
+#                       info['Cus'][idnan][bestephind].values * np.sin(2.0*PhiK) + 
+#                       info['Cuc'][idnan][bestephind].values * np.cos(2.0*PhiK), float)
+#    r = np.asarray((info['sqrtA'][idnan][bestephind].values**2) * 
+#                   (1.0 - ecc * np.cos(Ek)) + info['Crs'][idnan][bestephind].values * 
+#                   np.sin(2.0*PhiK) + info['Crc'][idnan][bestephind].values * 
+#                   np.cos(2.0*PhiK), float)
+#    i = np.asarray(info['Io'][idnan][bestephind].values + 
+#                   info['IDOT'][idnan][bestephind].values * t + 
+#                   info['Cis'][idnan][bestephind].values * np.sin(2.0*PhiK) + 
+#                   info['Cic'][idnan][bestephind].values * np.cos(2.0*PhiK), float)
+#    
+#    #Compute the right ascension
+#    Omega = np.asarray(info['Omega0'][idnan][bestephind].values + 
+#                       (info['OmegaDot'][idnan][bestephind].values - OeDOT) * t -
+#                       (OeDOT * info['Toe'][idnan][bestephind].values), float)
+#    ###########################################################################
+#    #Convert satellite position from orbital frame to ECEF frame
+#    cosOmega = np.cos(Omega)
+#    sinOmega = np.sin(Omega)
+#    cosomega = np.cos(omega)
+#    sinomega = np.sin(omega)
+#    cosi = np.cos(i)
+#    sini = np.sin(i)
+#    cosVk = np.cos(Vk)
+#    sinVk = np.sin(Vk)
+#    R11 = cosOmega*cosomega - sinOmega*sinomega*cosi
+#    R12 = -1.0*cosOmega*sinomega - sinOmega*cosomega*cosi
+#    #R13 = np.sin(Omega)*np.sin(i)
+#    R21 = sinOmega*cosomega + cosOmega*sinomega*cosi
+#    R22 = -1.0*sinOmega*sinomega + cosOmega*cosomega*cosi
+#    #R23 = -1.0*np.cos(Omega)*np.sin(i)
+#    R31 = sinomega*sini
+#    R32 = cosomega*sini
+#    #R33 = np.cos(i)
+#          
+#    xyz = np.zeros((len(times),3))
+#    rv = np.column_stack((r*cosVk,r*sinVk,np.zeros(r.shape)))
+#    
+#    R = np.empty((rv.shape[0],3,3))
+#    R[:,0,0] = R11
+#    R[:,0,1] = R12
+#    R[:,0,2] = 0
+#    R[:,1,0] = R21
+#    R[:,1,1] = R22
+#    R[:,1,2] = 0
+#    R[:,2,0] = R31
+#    R[:,2,1] = R32
+#    R[:,2,2] = 0
+#    
+#
+#    for i in range(len(times)): #THIS IS THE SLOWEST PART NOW
+#        xyz[i,:] = (R[i,:,:].dot(rv[i,:]))
+#        
+#    return xyz
 #%% Phase scintillation
 #def phaseDetrend(y, order,polynom=False):
 #    """
