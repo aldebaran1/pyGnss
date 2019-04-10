@@ -11,6 +11,7 @@ import ftplib
 import subprocess
 import os
 import platform
+from datetime import datetime
 from dateutil import parser
 
 def unzip(f, timeout=10):
@@ -48,7 +49,13 @@ def getRinexNav(date:str = None,
     url =  urlparse('ftp://cddis.nasa.gov/gnss/products/ionex/')
     # Parse date
     try:
-        dt = parser.parse(date)
+        if len(date.split('-')) == 3:
+            dt = parser.parse(date)
+        elif len(date.split('-')) == 2:
+            dt = datetime.strptime(date, '%Y-%j')
+        else:
+            print ("Wrong date format. Use 'yyyy-mm-dd' or 'yyyy-jjj'")
+            exit()
     except Exception as e:
         raise (e)
     year = str(dt.year)
