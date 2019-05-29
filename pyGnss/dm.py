@@ -39,6 +39,38 @@ def getNeighbours(image,i,j, N=1, direction='both', mask=False):
         return np.array(nbg), irange, jrange
     else:
         return np.array(nbg)
+    
+def fillPixels(im, N=1):
+    """
+    Fill in the dead pixels. If a dead pixel has a least 4 finite neighbour
+    pixel, than replace the center pixel with a mean valuse of the neighbours
+    """
+    im0 = np.copy(im)
+    for n in range(N):
+        skip = int(np.floor((2+n)/2))
+        iterate_j_f = np.arange(0,im.shape[1],skip) if (n%2 == 0) else np.arange(im.shape[1]-1,-1,-skip)
+        iterate_j_b = np.arange(0,im.shape[1],skip) if (n%2 == 1) else np.arange(im.shape[1]-1,-1,-skip)
+        iterate_i_f = np.arange(0, int(im.shape[0] * 0.6), skip) if (n % 2 == 0) else np.arange(im.shape[0]-1, int(im.shape[1] * 0.4), -skip)
+        iterate_i_b = np.arange(0, int(im.shape[1] * 0.6), skip) if (n % 2 == 1) else np.arange(im.shape[1]-1, int(im.shape[1] * 0.4), -skip)
+        for i in iterate_i_f:
+            for j in iterate_j_f:
+                # Check if the pixel is dead, i.e. empty
+                if np.isnan(im[i,j]):
+                    # Get its neighbours as a np array
+                    nbg = getNeighbours(im0,i,j,N=(3+n))
+                    # If there are at leas 4 neighbours, replace the value with a mean
+                    if sum(np.isfinite(nbg)) >= 4:
+                        im[i,j] = np.nanmean(nbg)
+        for i in iterate_i_b:
+            for j in iterate_j_b:
+                # Check if the pixel is dead, i.e. empty
+                if np.isnan(im[i,j]):
+                    # Get its neighbours as a np array
+                    nbg = getNeighbours(im0,i,j,N=(3+n))
+                    # If there are at leas 4 neighbours, replace the value with a mean
+                    if sum(np.isfinite(nbg)) >= 4:
+                        im[i,j] = np.nanmean(nbg)
+    return im
 
 def keogram(time: np.ndarray=None,
             xgrid: np.ndarray=None,
@@ -50,8 +82,11 @@ def keogram(time: np.ndarray=None,
             line: Union[int, bool] = False,
             Xn: int = 0,
             Yn: int = 0,
+            fillPixel: int = None,
             plotmask: bool = False,
+            imskip: int = None,
             filter:str = None):
+    if imskip is None: imskip = 1
     # Make a grid of input coordinates
     assert len(xgrid.shape) == len(ygrid.shape)
     if len(xgrid.shape) == 1:
@@ -70,23 +105,36 @@ def keogram(time: np.ndarray=None,
         idT = (time >= tlim[0]) & (time <= tlim[1])
         time = time[idT]
         im = im[idT]
+        im = im[::imskip]
+    # Fill Pixel:
+    if fillPixel is not None:
+        assert isinstance(fillPixel, int)
+        im[0] = fillPixels(np.squeeze(im), N=fillPixel)
     # Time dimension
     if isinstance(time, (list, np.ndarray)):
-        tlen = time.shape[0]
+        tlen = int(time.shape[0] / imskip)
     else:
         tlen = 1
     # Filter in space
     if isinstance(Xt, (int, float)):
         idX = (xgrid >= Xt) & (xgrid <= Xt)
+        if np.sum(idX) == 0: 
+            idX = np.zeros((xgrid.size), dtype=bool)
+            ix = abs(xgrid - Xt).argmin()
+            idX[ix] = True
     elif isinstance(Xt, (list, np.ndarray)):
         idX = (xgrid >= Xt.min()) & (xgrid <= Xt.max())
     if isinstance(Yt, (int, float, np.int64)):
         idY = (ygrid >= Yt) & (ygrid <= Yt)
+        if np.sum(idY) == 0: 
+            idY = np.zeros((ygrid.size), dtype=bool)
+            iy = abs(ygrid - Yt).argmin()
+            idY[iy] = True
     elif isinstance(Yt, (list, np.ndarray)):
         idY = (ygrid >= Yt.min()) & (ygrid <= Yt.max())
     # Filter in space if doing for an arbitrary line
     if line == True:
-        mask = np.full((xgrid.shape[0], ygrid.shape[0]), False, dtype=bool)
+        mask = np.full((xgrid.shape[0], ygrid.shape[0]), False, dtype = bool)
         for i in range(Xt.shape[0]):
             ix = abs(xgrid - Xt[i]).argmin()
             iy = abs(ygrid - Yt[i]).argmin()
@@ -105,7 +153,7 @@ def keogram(time: np.ndarray=None,
     keo = np.nan * np.ones((tlen, imlen))
     
     for ii,img in enumerate(im):
-        tmp = img[mask]
+        tmp = np.squeeze(img[mask])
         if Xn < 1 and Yn < 1:
             keo[ii] = tmp
         else:
@@ -121,7 +169,8 @@ def keogram(time: np.ndarray=None,
                 direction = 'both'
                 N = int(np.nanmax(([Xn,Yn])))
             for i, idx in enumerate(ix):
-                nbg = getNeighbours(img, idx, iy[i], N = N, direction = direction)
+                nbg = getNeighbours(img, idx, iy[i], 
+                                    N = N, direction = direction)
                 tmp[i] = np.nanmean(nbg)
             keo[ii] = tmp
     

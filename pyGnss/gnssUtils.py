@@ -354,7 +354,7 @@ def RepairObs(D, idel, args = ['L1', 'L2', 'L5']):
             pass
     return obs
 
-def getPolynomOrder(interval, Ts, weights=[2,3,7,10]):
+def getPolynomOrder(interval, Ts, weights=[1,4,7,10]):#[1,5,9,13]
     if isinstance(interval, list):
         interval = np.array(interval)
     lst_len = (interval[1] - interval[0]) * Ts / 60 # In minutes
@@ -367,6 +367,15 @@ def getPolynomOrder(interval, Ts, weights=[2,3,7,10]):
         polynom_order = weights[2]
     elif lst_len >= 100:
         polynom_order = weights[3]
+        
+#    if lst_len < 30:
+#        polynom_order = weights[0]
+#    elif lst_len >= 30 and lst_len < 70:
+#        polynom_order = weights[1]
+#    elif lst_len >= 70 and lst_len < 200:
+#        polynom_order = weights[2]
+#    elif lst_len >= 200:
+#        polynom_order = weights[3]
     return polynom_order
 
 def getIntervals(y, maxgap=1, maxjump=0.5):
@@ -388,17 +397,24 @@ def getIntervals(y, maxgap=1, maxjump=0.5):
             break
     return intervals
 
-def getPlainResidual(tec, Ts=1, maxgap = 2, verbose = False):
+def getPlainResidual(tec, Ts=1, maxgap=2, maxjump=1, 
+                     verbose = False,typ='poly', 
+                     fc=0.005, order=3, 
+                     weights=[1,4,7,10]):
 #    maxgap = 3600/Ts
-    intervals = getIntervals(tec, maxgap=maxgap, maxjump=1)
+    intervals = getIntervals(tec, maxgap=maxgap, maxjump=maxjump)
     tecd = np.nan * np.ones(tec.shape[0])
     for lst in intervals:
-        if lst[1]-lst[0] > 10:
-            polynom_order = getPolynomOrder(lst, Ts)
+        if lst[1]-lst[0] > (60/Ts):
+            polynom_order = getPolynomOrder(lst, Ts, weights=weights)
             # PolynomialOrder
 #            print ('order = ', polynom_order)
             tmp = phaseDetrend(tec[lst[0]:lst[1]], order=polynom_order)
-            if np.nanmax(abs(tmp)) < 3:
+            if typ == 'hpf':
+                skip = 15 if Ts > 10 else int(60/Ts)
+                tmp = hpf(tmp, fs=1/Ts, fc=fc, order=order)
+                tmp[:skip] = np.nan
+            if np.nanmax(abs(tmp)) < 20:
                 tecd[lst[0]:lst[1]] = tmp
             else:
                 if verbose: print ('Something went wrong big time.')

@@ -28,7 +28,8 @@ def phaseScintillationIndex(data, N):
     """
     y = np.nan * np.zeros(data.shape[0]-N)
     for i in range(data.shape[0] - N):
-        y[i] = np.std(data[i:i+N])
+        if np.sum(np.isfinite(data[i:i+N])) > 5:
+            y[i] = np.nanstd(data[i:i+N])
     return y
     
 def AmplitudeScintillationIndex(data, N):
@@ -38,6 +39,22 @@ def AmplitudeScintillationIndex(data, N):
     """
     y = np.nan * np.zeros(data.shape[0])
     for i in range(data.shape[0] - N):
-        y[i] = np.std(data[i:i+N] / np.mean(data[i:i+N]))
+        if np.sum(np.isfinite(data[i:i+N])) > 2:
+            y[i] = np.nanstd(data[i:i+N] / np.nanmean(data[i:i+N]))
     return y
 
+def sigmaTEC(x, N, median = False):
+    idx = np.isnan(x)
+    n2 = int(N/2)
+    iterate = np.arange(n2, x.size-n2)
+    y = np.nan * np.copy(x)
+    for i in iterate:
+        chunk = x[i-n2:i+n2]
+#        if median:
+#            x_sorted = np.sort(chunk)
+#            args = np.argsort(chunk)
+#            mask = np.arange(int(N/20), int(N - N/20)+1)
+        if np.sum(np.isfinite(chunk)) > N/4:
+            y[i] = np.nanstd(chunk)
+    y[idx] = np.nan
+    return y
