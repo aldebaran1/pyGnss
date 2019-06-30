@@ -9,7 +9,7 @@ Created on Tue Mar 12 16:32:54 2019
 import h5py
 import yaml
 import os
-from numpy import array, logical_or, round, meshgrid, arange, sort, empty
+from numpy import array, logical_or, logical_and, round, meshgrid, arange, sort, empty
 
 def makeGrid(ylim=[25,50], xlim=[-110,-80], res=0.5):
     """
@@ -48,7 +48,7 @@ def filterandsave(fn: str = None, ofn: str = None,
     # filter - spatial
     idx = (x >= lonlim[0]) & (x <= lonlim[1])
     idy = (y >= latlim[0]) & (y <= latlim[1])
-    ix = logical_or(idx,idy)
+    ix = logical_and(idx, idy)
     x = x[ix]
     y = y[ix]
     r = r[ix]
@@ -77,6 +77,7 @@ def filterandsave(fn: str = None, ofn: str = None,
         x = x[idrx]
         y = y[idrx]
         r = r[idrx]
+
     outd = [[str(r[i]), str(round(x[i],2)), str(round(y[i],2))] for i in range(r.size)]
     
     # Dump to yaml

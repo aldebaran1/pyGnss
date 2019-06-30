@@ -20,7 +20,7 @@ def download(F, rx, filename,force=False):
     path, tail = os.path.split(filename)
     if not os.path.exists(path):
         try:
-            subprocess.call('mkdir ' + path, shell=True)
+            subprocess.call('mkdir -p {}'.format(path), shell=True)
         except:
             print ('Cant make the directory')
     if (os.path.exists(filename) or os.path.exists(os.path.splitext(filename)[0]))  and not force:
