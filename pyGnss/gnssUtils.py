@@ -399,10 +399,12 @@ def getIntervals(y, maxgap=1, maxjump=0.5):
 
 def getPlainResidual(tec, Ts=1, maxgap=2, maxjump=1, 
                      verbose = False,typ='poly', 
+                     intervals = None,
                      fc=0.005, order=3, 
                      weights=[1,4,7,10]):
-#    maxgap = 3600/Ts
-    intervals = getIntervals(tec, maxgap=maxgap, maxjump=maxjump)
+    if intervals is None:
+        intervals = getIntervals(tec, maxgap=maxgap, maxjump=maxjump)
+    assert isinstance(intervals, list)
     tecd = np.nan * np.ones(tec.shape[0])
     for lst in intervals:
         if lst[1]-lst[0] > (60/Ts):

@@ -290,7 +290,7 @@ def gpsSatPosition(fnav, dt, sv=None, rx_position=None, coords='xyz'):
     navtimes = navtimes[idnan]
     bestephind = []
     for t in timesarray:
-        idt = abs(navtimes - t).argmin() if t>navtimes[abs(navtimes - t).argmin()] else abs(navtimes - t).argmin()-1
+        idt = abs(navtimes - t).argmin() #if t>navtimes[abs(navtimes - t).argmin()] else abs(navtimes - t).argmin()-1
         bestephind.append(idt)
 #    bestephind = np.array([np.argmin(abs(navtimes-t)) for t in timesarray])
     gpstime = np.array([getGpsTime(t) for t in dt])
@@ -423,7 +423,8 @@ def getMappingFunction(el, h):
     
     Re = 6371.0
     rc1 = (Re / (Re + h))
-    F = np.cos(np.arcsin(rc1*np.cos(np.radians(el))))
+    arg = rc1 * np.cos(np.radians(el))
+    F = np.cos(np.arcsin(arg))
 #    F = np.sqrt(1 - (np.cos(np.radians(el))**2 * rc1**2))
     return np.array(F)
 
