@@ -422,3 +422,34 @@ def getPlainResidual(tec, Ts=1, maxgap=2, maxjump=1,
                 if verbose: print ('Something went wrong big time.')
                 pass
     return tecd
+
+def cubicSplineFit(x, idf):
+    x0 = np.where(idf)[0]
+    x1 = np.arange(x.size)
+    CSp = CubicSpline(x0, x[idf])
+    y = CSp(x1)
+    return y
+
+def detrend(x, polynom_list=None, eps=1, mask=None, polynomial_order=False):
+    if polynom_list is None:
+        polynom_list = np.arange(1,16)
+    if mask is None:
+        mask = np.ones(x.size, dtype=bool)
+    err_list = np.nan * np.zeros(polynom_list.size)
+    err_diff_list = np.nan * np.zeros(polynom_list.size-1)
+    err_list[:3] = 9999.0
+    err_list[:2] = 9999.0
+    for i in polynom_list[2:]:
+        res = phaseDetrend(x, order=i)
+        res_masked = res[~mask]
+        err = np.nansum(np.abs(res_masked)**2)
+        err_list[i] = err
+        D0 = abs(err_list[i-1] - err)
+        err_diff_list[i] = D0
+        if err_diff_list[i] <= eps and err_diff_list[i-1] <= eps:
+            break
+    if polynomial_order:
+        return res, err_list, i
+    else:
+        return res, err_list
+
