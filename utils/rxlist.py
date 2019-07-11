@@ -71,10 +71,14 @@ def writeRxlist2HDF(obsfolder='/media/smrak/Eclipse2017/Eclipse/cors/all/233/',
                     print ('Cant find the position of the gps receiver: {}'.format(fn))
                     rec_lat = nan
                     rec_lon = nan
+            elif sx.endswith('.nc'):
+                D = grx.load(fn)
+                rec_lat, rec_lon, rec_alt = D.position_geodetic
             table[c,:] = [rec_lat, rec_lon]
             c+=1
         except Exception as e:
             print ('Couldnt process: ', fn)
+            print (e)
             c+=1
     print ('Saving as: ', listfilename)
     gpslist = [os.path.split(l)[1][:4] for l in rxlist]
@@ -94,7 +98,7 @@ if __name__ == '__main__':
     p.add_argument('-n', '--filename', help='list filename',type=str, default='')
     p.add_argument('-s', '--sufix', 
                    help='obs suffix to take? *.*o; *.*d; or *.yaml (default = *.*d,*.*o)',
-                   type=str, default='*.*d,*.*o')
+                   type=str, default='*.*d,*.*o,*.nc')
     P = p.parse_args()
     
 
