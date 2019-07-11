@@ -10,6 +10,7 @@ from six.moves.urllib.parse import urlparse
 import ftplib
 import numpy as np
 import yaml
+from glob import glob
 import os
 from datetime import datetime
 import subprocess
@@ -17,21 +18,37 @@ import platform
 from dateutil import parser
 
 def download(F, rx, filename,force=False):
-    path, tail = os.path.split(filename)
-    if not os.path.exists(path):
-        try:
-            subprocess.call('mkdir -p {}'.format(path), shell=True)
-        except:
-            print ('Cant make the directory')
-    if (os.path.exists(filename) or os.path.exists(os.path.splitext(filename)[0]))  and not force:
-        print ('{} File already exists'.format(tail))
-    else:
-        print ('Downloading file: {}'.format(tail))
+    def _dl(F,rx):
         try:
             with open(filename, 'wb') as h:
                 F.retrbinary('RETR {}'.format(rx), h.write)
         except:
-            pass
+            print ("Couldn't download {}".format(rx))
+        return
+    
+    # Check is destination directory exists?
+    path, tail = os.path.split(filename)
+    
+    if not os.path.exists(path):
+        #NO? Well, create the directory. 
+        try:
+            subprocess.call('mkdir -p {}'.format(path), shell=True)
+        except:
+            print ('Cant make the directory')
+    # Does the file already exists in the destination directory?
+    flist = sorted(glob(path+'/*'))
+    fnlist = np.array([os.path.splitext(f)[0] for f in flist])
+    if np.isin(os.path.splitext(filename)[0], fnlist):
+        # Do you want to override it?
+        if force:
+            _dl(F, rx)
+        # Else skip the step
+        else:
+            print ('{} File already exists'.format(tail))
+    # Else Download the file
+    else:
+        print ('Downloading file: {}'.format(tail))
+        _dl(F, rx)
         
 def getSingleRxUrl(year, doy, F, db, rxn, hr=False):
     d = []

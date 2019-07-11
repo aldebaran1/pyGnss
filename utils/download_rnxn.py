@@ -10,6 +10,8 @@ from six.moves.urllib.parse import urlparse
 import ftplib
 import subprocess
 import os
+import numpy as np
+from glob import glob
 import platform
 from datetime import datetime
 from dateutil import parser
@@ -31,12 +33,19 @@ def unzip(f, timeout=10):
     return
 
 def download(F, rx, filename):
-    print ('Downloading to: ', filename)
-    try:
-        with open(filename, 'wb') as h:
-            F.retrbinary('RETR {}'.format(rx), h.write)
-    except:
-        pass
+    # Does the file already exists in the destination directory?
+    path, tail = os.path.split(filename)
+    flist = sorted(glob(path+'/*'))
+    fnlist = np.array([os.path.splitext(f)[0] for f in flist])
+    if np.isin(os.path.splitext(filename)[0], fnlist):
+        print ("{} already exists".format(tail))
+    else:
+        print ('Downloading to: ', filename)
+        try:
+            with open(filename, 'wb') as h:
+                F.retrbinary('RETR {}'.format(rx), h.write)
+        except:
+            pass
 
 def getRinexNav(date:str = None,
                 odir:str = None,
