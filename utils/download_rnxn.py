@@ -90,21 +90,28 @@ def getRinexNav(date:str = None,
         rpath = url[2] + '/' + year + '/' + doy + '/'
         F.cwd(rpath)
         if const == 'sp3':
-            ts = (dt - datetime(1980, 1,6)).total_seconds()
+            ts = (dt - datetime(1980, 1, 6)).total_seconds()
             gpsweek = int(ts / 60 /60 / 24 / 7)
-            weekday = dt.weekday() + 1
+            weekday = (dt.weekday() + 1 ) % 7
             wwwwd = str(gpsweek) + str(weekday)
-            urlrx = 'igs{}.sp3'.format(wwwwd)
+            urlrx = 'igs{}.sp3.gz'.format(wwwwd)
+            print (urlrx)
+            sfn = 'igs{}0.{}sp3.gz'.format(doy, year[-2:])
+            try:
+                # urlrx must in in a format "nnnDDD0.YYo.xxx"
+                download(F, urlrx, odir+sfn)
+            except Exception as e:
+                print (e)
         else:
             urlrx = 'brdc' + doy + '0.' + year[-2:]+sct[const]+'.gz'
-        print (urlrx)
-        try:
-            # urlrx must in in a format "nnnDDD0.YYo.xxx"
-            download(F, urlrx, odir+urlrx)
-        except Exception as e:
-            print (e)
-    if urlrx.endswith('.gz') or urlrx.endswith('.Z') or urlrx.endswith('.zip'):
-        unzip(odir+urlrx)
+            sfn = urlrx
+            try:
+                # urlrx must in in a format "nnnDDD0.YYo.xxx"
+                download(F, urlrx, odir+urlrx)
+            except Exception as e:
+                print (e)
+                
+    unzip(odir+sfn)
         
     return
 if __name__ == '__main__':
