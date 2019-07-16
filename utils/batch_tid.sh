@@ -14,10 +14,11 @@ fi
 ddt=$(date -d $date +'%Y-%j')
 year=$(date -d $date +'%Y')
 doy=$(date -d $date +'%j')
+foldername=$(date -d $date +'%m%d')
 
-FN=$OBSDIR$year/$doy/
-FNYAML=$OBSDIR$year/all$doy.yaml
-FNYAMLC=$OBSDIR$year/conus$doy.yaml
+FN=$OBSDIR$year/$foldername/
+FNYAML=$OBSDIR$year/all$foldername.yaml
+FNYAMLC=$OBSDIR$year/conus$foldername.yaml
 
 echo Downloading 1/7:
 python download_rnxi.py $ddt $SBDIR
@@ -31,15 +32,12 @@ echo listing receiver locations 3/7 from $FN
 python rxlist.py $FN
 echo ==============================
 echo filter receiver locations 4/7
-echo $FN'rxlist'$doy.$year.h5 $FNYAML
-python rxfilter.py $FN'rxlist'$doy.$year.h5 $FNYAML
-python rxfilter.py $FN'rxlist'$doy.$year.h5 $FNYAMLC --lonlim -140 -50 --latlim 0 65
+echo $FN'rxlist'$foldername.$year.h5 $FNYAML
+python rxfilter.py $FN'rxlist'$foldername.$year.h5 $FNYAML
+python rxfilter.py $FN'rxlist'$foldername.$year.h5 $FNYAMLC --lonlim -140 -50 --latlim 0 65
 echo ==============================
 echo Converting 5/7
 python rnx2nc.py $FN
 echo Deleting unconverted and rnx/crx
 rm -rf $FN*.*d
 rm -rf $FN*.*o
-#echo ==============================
-#echo Processing 6/7 to tid
-#echo python $CONVDIR'nc2tec_v1.py' $date $FNYAMLC --ts 120 --elmask 20 --log --cfg $CONVDIR'tid_processing.yaml'

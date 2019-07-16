@@ -235,21 +235,25 @@ def getRinexObs(date,
     else: 
         print ('Error - Soomething is wrong with your day of year (DOY)')
     
-        
     # Complete the save directory path
     if not fix:
-        if not os.path.exists(odir+year+des+doy+des):
-            if not os.path.exists(odir+year+des):
-                if not os.path.exists(odir + year + des):
+        if len(str(dt.month)) == 1:
+            month = '0' + str(dt.month)
+        if len(str(dt.day)) == 1:
+            day = '0' + str(dt.day)
+        foldername = month + day
+        odir += year + des + foldername + des
+        if not os.path.exists(odir):
+            if not os.path.exists(odir):
+                if not os.path.exists(odir):
                     try:
-                        subprocess.call('mkdir "{}"'.format(odir + year + des), shell=True)
+                        subprocess.call('mkdir "{}"'.format(odir), shell=True)
                     except:
                         print ('Cant make the directory')
             try:
-                subprocess.call('mkdir "{}"'.format(odir + year + des + doy + des), shell=True)
+                subprocess.call('mkdir "{}"'.format(odir), shell=True)
             except:
                 print ('Cant make the directory')
-        odir += year + des + doy + des
     # Reasign dllist from yaml into rx [list]
     if dllist is not None and isinstance(dllist,str):
         if dllist[-5:] == '.yaml':
