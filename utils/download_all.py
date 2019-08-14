@@ -30,7 +30,7 @@ def startP(line):
     
 def main(start, stop, root=None, p=1):
     if root is None:
-        root = 'batch_tid.sh'
+        root = './batch_tid.sh'
     dates_list = _getDates(start, stop)
     cmmnds = [root + ' ' + d for d in dates_list]
     

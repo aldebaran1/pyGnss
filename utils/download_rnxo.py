@@ -239,8 +239,12 @@ def getRinexObs(date,
     if not fix:
         if len(str(dt.month)) == 1:
             month = '0' + str(dt.month)
+        else:
+            month = str(dt.month)
         if len(str(dt.day)) == 1:
             day = '0' + str(dt.day)
+        else:
+            day = str(dt.day)
         foldername = month + day
         odir += year + des + foldername + des
         if not os.path.exists(odir):

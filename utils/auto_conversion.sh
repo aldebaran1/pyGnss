@@ -13,8 +13,13 @@ OBSDIR=/media/smrak/gnss/obs/
 PYCONV=/home/smrak/Documents/pyTID/pytid/singlerx_v2.py
 PYGRID=/home/smrak/Documents/pyTID/pytid/tid2grid_v2.py
 
-echo Enter the date YYYY-mm-dd:
-read date
+if [ $1 ]; then
+  date=$1
+else
+  echo Enter the date YYYY-mm-dd:
+  read date
+fi
+
 ddt=$(date -d $date +'%Y-%j')
 year=$(date -d $date +'%Y')
 doy=$(date -d $date +'%j')
@@ -22,7 +27,8 @@ doy=$(date -d $date +'%j')
 FN=/media/smrak/gnss/obs/$year/$doy/
 FNYAML=/media/smrak/gnss/obs/$year/conus$doy.yaml
 FNGRID=/media/smrak/gnss/hdfgrid/
-HDFFN=conus$doy.yaml_$year'_'$H'km.h5'
+HDFFN=/media/smrak/gnss/hdf/conus$doy.yaml_$year'_'$H'km_30el.h5'
+
 echo Downloading 1/7:
 python download_rnxi.py $ddt $SBDIR
 python download_rnxn.py $ddt $NAVDIR
@@ -42,6 +48,7 @@ python rnx2nc.py $FN --list $FNYAML
 echo ==============================
 echo Processing 6/7
 python $PYCONV $year $doy $FNYAML --altkm $H
+
 echo ==============================
 echo Gridding 7/7
 python $PYGRID $HDFFN $FNGRID'conus_03_'$year'_'$doy.h5
