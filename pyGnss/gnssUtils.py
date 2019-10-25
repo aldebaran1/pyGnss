@@ -436,7 +436,7 @@ def detrend(x, polynom_list=None, eps=1, mask=None, polynomial_order=False):
     if mask is None:
         mask = np.ones(x.size, dtype=bool)
     err_list = np.nan * np.zeros(polynom_list.size)
-    err_diff_list = np.nan * np.zeros(polynom_list.size-1)
+    err_diff_list = np.nan * np.zeros(polynom_list.size)
     err_list[:3] = 9999.0
     err_list[:2] = 9999.0
     for i in polynom_list[2:]:
@@ -453,3 +453,44 @@ def detrend(x, polynom_list=None, eps=1, mask=None, polynomial_order=False):
     else:
         return res, err_list
 
+def makeranges(y0, idf, gap_length=10, lim=0.05, min_length=None, max_length=None, 
+               zero_mean=False, extend=0):
+    gap = np.diff(np.where(idf)[0])
+    i00 = np.where(idf)[0][0]
+    i99 = np.where(idf)[0][-1]
+    ixg = np.squeeze(np.argwhere(gap >= gap_length))
+    LL = np.sort(np.hstack((ixg, ixg+1)))
+    inner_limits = np.where(idf)[0][LL]
+    limits = np.sort(np.hstack((i00,inner_limits,i99)))
+    assert limits.size % 2 == 0
+    ranges = limits.reshape(int(limits.size/2), 2)
+    # Check for ranges vlidity: approx. zero mean
+    if zero_mean:
+        mask = []
+        for i, r in enumerate(ranges):
+            m_hat = np.nanmean(y0[r[0]:r[1]])
+            if abs(m_hat) < lim: mask.append(i)
+        if len(mask) > 0:
+            mask = np.array(mask)
+            ranges = ranges[mask]
+    if min_length is not None:
+        mask = np.squeeze(np.diff(ranges) > min_length)
+        ranges = ranges[mask]
+    if max_length is not None:
+        mask = np.squeeze(np.diff(ranges) < max_length)
+        ranges = ranges[mask]
+    if len(ranges.shape) == 3:
+        if isinstance(ranges, np.ndarray):
+            if ranges.shape[0] != 0: 
+                ranges = ranges[0]
+    try:
+        if extend > 0:
+            start = ranges[:,0]
+            ixstart = start > extend + 1
+            ranges[ixstart,0] -= extend
+            stop = ranges[:,1]
+            ixstop = stop < (y0.size - extend - 1)
+            ranges[ixstop, 1] += extend
+    except:
+        pass
+    return ranges
