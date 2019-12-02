@@ -437,9 +437,9 @@ def detrend(x, polynom_list=None, eps=1, mask=None, polynomial_order=False):
         mask = np.ones(x.size, dtype=bool)
     err_list = np.nan * np.zeros(polynom_list.size)
     err_diff_list = np.nan * np.zeros(polynom_list.size)
-    err_list[:3] = 9999.0
-    err_list[:2] = 9999.0
-    for i in polynom_list[2:]:
+    err_list[:1] = 9999.0
+    err_diff_list[:2] = 9999.0
+    for i in polynom_list[1:]:
         res = phaseDetrend(x, order=i)
         res_masked = res[~mask]
         err = np.nansum(np.abs(res_masked)**2)

@@ -281,6 +281,27 @@ def AmplitudeScintillationIndex(data, N):
         y[i] = np.std(data[i:i+N] / np.mean(data[i:i+N]))
     return y
 
+def gpsSatPositionSP3(fsp3, dt, sv=None, rx_position=None, coords='xyz'):
+    assert sv is not None
+    # Read in data
+    D = gr.load(fsp3).sel(sv=sv)
+    dt = dt.astype('datetime64[s]')
+    navtimes = D.time.values.astype('datetime64[s]')
+    CSx = interpolate.CubicSpline(navtimes.astype(int), D.ecef.values[:,0])
+    CSy = interpolate.CubicSpline(navtimes.astype(int), D.ecef.values[:,1])
+    CSz = interpolate.CubicSpline(navtimes.astype(int), D.ecef.values[:,2])
+    ecefxi = CSx(dt.astype(int))*1e3
+    ecefyi = CSy(dt.astype(int))*1e3
+    ecefzi = CSz(dt.astype(int))*1e3
+    
+    if coords == 'xyz':
+        return np.array([ecefxi, ecefyi, ecefzi])
+    else:
+        
+        AER = ecef2aer(x=ecefxi, y=ecefyi, z=ecefzi,
+                       lon0=rx_position[1], lat0=rx_position[0], h0=rx_position[2])
+        return np.array(AER)
+
 def gpsSatPosition(fnav, dt, sv=None, rx_position=None, coords='xyz'):
     navdata = gr.load(fnav).sel(sv=sv)
     timesarray = np.asarray(dt,dtype='datetime64[ns]') #[datetime64 [ns]]
@@ -853,14 +874,13 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
     # return dict with data/args
     return Y
 
-def dataFromNC(fnc,fnav,sv,
+def dataFromNC(fnc,fnav, sv, fsp3=None,
                el_mask=30,tlim=None, 
                satpos=False,
                ipp=False,
                ipp_alt=None):
     leap_seconds = uf.getLeapSeconds(fnav)
     D = gr.load(fnc, useindicators=True).sel(sv=sv)
-#    if isinstance(D.time[0], str):
     D['time'] = np.array([np.datetime64(ttt) for ttt in D.time.values])
     if tlim is not None:
         if len(tlim) == 2:
@@ -870,17 +890,17 @@ def dataFromNC(fnc,fnav,sv,
     
     dt = np.array([Timestamp(t).to_pydatetime() for t in obstimes64]) - \
                datetime.timedelta(seconds = leap_seconds)
-    rx_xyz = D.position
-    aer = gpsSatPosition(fnav,dt,sv=sv, rx_position=rx_xyz, coords='aer')
-    idel = (aer[1] >= el_mask)
-#    idelTrue = (aer[1] >= el_mask)
-#    aer = aer[:, idel]
+    if fsp3 is None:
+        aer = gpsSatPosition(fnav, dt, sv=sv, rx_position=D.position, coords='aer')
+    else:
+        aer = gpsSatPositionSP3(fsp3, dt, sv=sv, rx_position=D.position_geodetic, coords='aer')
+    idel = (aer[1,:] >= el_mask)
     aer[:,~idel] = np.nan
     D['time'] = dt
+
     if satpos:
-        D['az'] = aer[0]
-        D['el'] = aer[1]
-#        D['idelTrue'] = idelTrue
+        D['az'] = aer[0,:]
+        D['el'] = aer[1,:]
         D['idel'] = idel
     if ipp:
         if ipp_alt is None:
@@ -888,7 +908,7 @@ def dataFromNC(fnc,fnav,sv,
             ipp_alt = 250e3
         else:
             ipp_alt *= 1e3
-        rec_lat, rec_lon, rec_alt = ecef2geodetic(rx_xyz[0], rx_xyz[1], rx_xyz[2])
+        rec_lat, rec_lon, rec_alt = D.position_geodetic
         fm = np.sin(np.radians(aer[1]))
         r_new = ipp_alt / fm
         lla_vector = np.array(aer2geodetic(aer[0], aer[1], r_new, rec_lat, rec_lon, rec_alt))

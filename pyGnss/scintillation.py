@@ -43,18 +43,26 @@ def AmplitudeScintillationIndex(data, N):
             y[i] = np.nanstd(data[i:i+N] / np.nanmean(data[i:i+N]))
     return y
 
-def sigmaTEC(x, N, median = False):
+def sigmaTEC(x, N):
     idx = np.isnan(x)
     n2 = int(N/2)
     iterate = np.arange(n2, x.size-n2)
     y = np.nan * np.copy(x)
     for i in iterate:
         chunk = x[i-n2:i+n2]
-#        if median:
-#            x_sorted = np.sort(chunk)
-#            args = np.argsort(chunk)
-#            mask = np.arange(int(N/20), int(N - N/20)+1)
         if np.sum(np.isfinite(chunk)) > N/4:
             y[i] = np.nanstd(chunk)
+    y[idx] = np.nan
+    return y
+
+def s4(x, N):
+    idx = np.isnan(x)
+    n2 = int(N/2)
+    iterate = np.arange(n2, x.size-n2)
+    y = np.nan * np.copy(x)
+    for i in iterate:
+        chunk = x[i-n2:i+n2]
+        if np.sum(np.isfinite(chunk)) > N/4:
+            y[i] = np.nanstd(chunk) / np.nanmean(chunk)
     y[idx] = np.nan
     return y

@@ -83,27 +83,44 @@ def getRinexNav(date:str = None,
     # Constellation navigation file variable
     sct = {'gps' : 'n',
            'glonass' : 'g',
-           'gallileo' : 'e'}
+           'gallileo' : 'e',
+           'sp3': 'sp3'}
     # Open a connection to the FTP address
     with ftplib.FTP(url[1],'anonymous','guest',timeout=15) as F:
         rpath = url[2] + '/' + year + '/' + doy + '/'
         F.cwd(rpath)
-        urlrx = 'brdc' +doy + '0.' + year[-2:]+sct[const]+'.gz'
-        print (urlrx)
-        try:
-            # urlrx must in in a format "nnnDDD0.YYo.xxx"
-            download(F, urlrx, odir+urlrx)
-        except Exception as e:
-            print (e)
-            
-    unzip(odir+urlrx)
+        if const == 'sp3':
+            ts = (dt - datetime(1980, 1, 6)).total_seconds()
+            gpsweek = int(ts / 60 /60 / 24 / 7)
+            weekday = (dt.weekday() + 1 ) % 7
+            wwwwd = str(gpsweek) + str(weekday)
+            urlrx = 'igs{}.sp3.gz'.format(wwwwd)
+            print (urlrx)
+            sfn = 'igs{}0.{}sp3.gz'.format(doy, year[-2:])
+            try:
+                # urlrx must in in a format "nnnDDD0.YYo.xxx"
+                download(F, urlrx, odir+sfn)
+            except Exception as e:
+                print (e)
+        else:
+            urlrx = 'brdc' + doy + '0.' + year[-2:]+sct[const]+'.gz'
+            sfn = urlrx
+            try:
+                # urlrx must in in a format "nnnDDD0.YYo.xxx"
+                download(F, urlrx, odir+urlrx)
+            except Exception as e:
+                print (e)
+                
+    unzip(odir+sfn)
+        
+    return
 if __name__ == '__main__':
     from argparse import ArgumentParser
     p = ArgumentParser()
     p.add_argument('date', type=str, help='Date format YYYY-mm-dd')
     p.add_argument('dir', type=str, help='destination directory')
-    p.add_argument('--sct', type=str, help='constellation type',default='gps')
+    p.add_argument('--type', type=str, help='Navtype type: gps, glonass, gallileo, sp3', default='gps')
     
     P = p.parse_args()
     # Get file
-    getRinexNav(date = P.date, odir = P.dir, const = P.sct)
+    getRinexNav(date = P.date, odir = P.dir, const = P.type)

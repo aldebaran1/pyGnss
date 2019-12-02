@@ -9,7 +9,7 @@ Created on Tue Mar 12 16:32:54 2019
 import h5py
 import yaml
 import os
-from numpy import array, logical_or, logical_and, round, meshgrid, arange, sort, empty
+from numpy import array, logical_and, round, meshgrid, arange, sort, empty, nan_to_num, isfinite
 
 def makeGrid(ylim=[25,50], xlim=[-110,-80], res=0.5):
     """
@@ -20,7 +20,7 @@ def makeGrid(ylim=[25,50], xlim=[-110,-80], res=0.5):
 
 def getData(fn):
     fn = h5py.File(fn, 'r')
-    rx = fn['data/rx'].value
+    rx = fn['data/rx'][:]
     lat = fn['data/table'][:,0]
     lon = fn['data/table'][:,1]
     rxa = [str(l[0].decode('ascii')) for l in rx]
@@ -46,8 +46,8 @@ def filterandsave(fn: str = None, ofn: str = None,
     # Get data and locations
     x,y,r = getData(fn)
     # filter - spatial
-    idx = (x >= lonlim[0]) & (x <= lonlim[1])
-    idy = (y >= latlim[0]) & (y <= latlim[1])
+    idx = (nan_to_num(x) >= lonlim[0]) & (nan_to_num(x) <= lonlim[1]) & (isfinite(x))
+    idy = (nan_to_num(y) >= latlim[0]) & (nan_to_num(y) <= latlim[1]) & (isfinite(y))
     ix = logical_and(idx, idy)
     x = x[ix]
     y = y[ix]
