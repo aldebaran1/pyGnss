@@ -102,12 +102,36 @@ def getRinexNav(date:str = None,
                 download(F, urlrx, odir+sfn)
             except Exception as e:
                 print (e)
+        elif const =='gps':
+            urlrx = 'brdc' + doy + '0.' + year[-2:]+sct[const]+'.gz'
+            sfn = urlrx
+            try:
+                # urlrx must in in a format "nnnDDD0.YYo.xxx"
+                download(F, urlrx, odir+urlrx)
+                unzip(odir+sfn)
+            except Exception as e:
+                print (e)
+            # SP3
+            ts = (dt - datetime(1980, 1, 6)).total_seconds()
+            gpsweek = int(ts / 60 /60 / 24 / 7)
+            weekday = (dt.weekday() + 1 ) % 7
+            wwwwd = str(gpsweek) + str(weekday)
+            urlrx = 'igs{}.sp3.gz'.format(wwwwd)
+            print (urlrx)
+            sfn = 'igs{}0.{}sp3.gz'.format(doy, year[-2:])
+            try:
+                # urlrx must in in a format "nnnDDD0.YYo.xxx"
+                download(F, urlrx, odir+sfn)
+                unzip(odir+sfn)
+            except Exception as e:
+                print (e)
         else:
             urlrx = 'brdc' + doy + '0.' + year[-2:]+sct[const]+'.gz'
             sfn = urlrx
             try:
                 # urlrx must in in a format "nnnDDD0.YYo.xxx"
                 download(F, urlrx, odir+urlrx)
+                unzip(odir+sfn)
             except Exception as e:
                 print (e)
                 

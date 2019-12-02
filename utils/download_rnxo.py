@@ -38,7 +38,7 @@ def download(F, rx, filename,force=False):
     # Does the file already exists in the destination directory?
     flist = sorted(glob(path+'/*'))
     fnlist = np.array([os.path.splitext(f)[0] for f in flist])
-    if np.isin(os.path.splitext(filename)[0], fnlist):
+    if np.isin(filename, fnlist):
         # Do you want to override it?
         if force:
             _dl(F, rx)

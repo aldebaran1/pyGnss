@@ -67,7 +67,7 @@ def filterandsave(fn: str = None, ofn: str = None,
         mask = rx_ix_map == ''
         idrx = []
         for val in rx_ix_map[~mask]:
-            if len(val) > 3:
+            if len(val) > 1:
                 for i, v in enumerate(val.split(',')):
                     if i == density: break
                     idrx.append(int(v))
