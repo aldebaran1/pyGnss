@@ -40,7 +40,8 @@ def AmplitudeScintillationIndex(data, N):
     y = np.nan * np.zeros(data.shape[0])
     for i in range(data.shape[0] - N):
         if np.sum(np.isfinite(data[i:i+N])) > 2:
-            y[i] = np.nanstd(data[i:i+N] / np.nanmean(data[i:i+N]))
+#            y[i] = np.sqrt( (np.nanmean(np.square(data[i:i+N]))-np.nanmean(data[i:i+N])**2)  / np.nanmean(data[i:i+N])**2 )
+            y[i] = np.sqrt(np.nanvar(data[i:i+N])) / np.nanmean(data[i:i+N])
     return y
 
 def sigmaTEC(x, N):
