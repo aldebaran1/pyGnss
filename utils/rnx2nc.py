@@ -14,10 +14,11 @@ from time import sleep
 import georinex as gr
 from datetime import datetime
 
-def _convert(file, odir, i, tlim=None, fast=True, use = 'G'):
+def _convert(file, odir, i, tlim=None, fast=True, 
+             use = 'G', override=False):
     try:
         gr.load(file, out = odir, useindicators = i,
-                fast = fast, tlim=tlim, use = use)
+                fast = fast, tlim=tlim, use = use, override = override)
     except Exception as e:
         print (e)
     sleep(0.1)
@@ -28,12 +29,14 @@ def _iterate(file, odir, override, indicators, tlim=None, use = 'G', fast = True
     if not override:
         if not os.path.exists(newfn):
             print ('Converting: {}'.format(tail))
-            _convert(file, odir, indicators, tlim=tlim, fast=fast, use=use)
+            _convert(file, odir, indicators, tlim=tlim, fast=fast, 
+                     use = use, override = override)
         else:
             print ("{} already exists.".format(os.path.split(newfn)[1]))
     else:
         print ('Converting: {}'.format(tail))
-        _convert(file, odir, indicators, tlim=tlim, fast=fast, use=use)
+        _convert(file, odir, indicators, tlim=tlim, fast=fast, 
+                 use = use, override = override)
         
 def convertObs2HDF(folder=None, sufix=None, odir=None, override=False,
                    indicators=False, tlim=None, rxlist = None, use = 'G', fast = True):
