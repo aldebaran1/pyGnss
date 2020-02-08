@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-NAVDIR=/media/smrak/gnss/nav/
-SBDIR=/media/smrak/gnss/jplg/
-OBSDIR=/media/smrak/gnss/obs/
+NAVDIR=/projectnb/semetergrp/tid/nav/
+SBDIR=/projectnb/semetergrp/tid/jplg/
+OBSDIR=/projectnb/semetergrp/tid/obs/
 
 if [ $1 ]; then
   date=$1
@@ -28,8 +28,8 @@ python download_rnxo.py $ddt conus $OBSDIR
 echo Unzipping 2/7:
 python unzip_rm.py $FN
 echo ==============================
-echo listing receiver locations 3/7 from $FN
-python rxlist.py $FN
+#echo listing receiver locations 3/7 from $FN
+#python rxlist.py $FN
 echo ==============================
 echo filter receiver locations 4/7
 echo $FN'rxlist'$foldername.$year.h5 $FNYAML
@@ -38,6 +38,10 @@ python rxfilter.py $FN'rxlist'$foldername.$year.h5 $FNYAMLC --lonlim -140 -50 --
 echo ==============================
 echo Converting 5/7
 python rnx2nc.py $FN
+echo ==============================
 echo Deleting unconverted and rnx/crx
 rm -rf $FN*.*d
 rm -rf $FN*.*o
+echo ==============================
+echo listing receiver locations
+python rxlist.py $FN
