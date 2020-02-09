@@ -8,14 +8,11 @@ smrak@bu.edu
 import numpy as np
 from datetime import timedelta
 from scipy import interpolate
-from pandas import DataFrame
-from pymap3d import ecef2geodetic,ecef2aer,aer2geodetic
-import h5py
+from pymap3d import ecef2geodetic,ecef2aer,aer2geodetic,geodetic2ecef
 import xarray
 import datetime
 import matplotlib.pyplot as plt
 from pandas import Timestamp
-#from pyRinex import pyRinex
 import georinex as gr
 from pyGnss import gnssUtils as uf
 from glob import glob
@@ -285,11 +282,13 @@ def gpsSatPositionSP3(fsp3, dt, sv=None, rx_position=None, coords='xyz'):
     assert sv is not None
     # Read in data
     D = gr.load(fsp3).sel(sv=sv)
+    if isinstance(dt, list):
+        dt = np.asarray(dt)
     dt = dt.astype('datetime64[s]')
     navtimes = D.time.values.astype('datetime64[s]')
-    CSx = interpolate.CubicSpline(navtimes.astype(int), D.ecef.values[:,0])
-    CSy = interpolate.CubicSpline(navtimes.astype(int), D.ecef.values[:,1])
-    CSz = interpolate.CubicSpline(navtimes.astype(int), D.ecef.values[:,2])
+    CSx = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,0])
+    CSy = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,1])
+    CSz = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,2])
     ecefxi = CSx(dt.astype(int))*1e3
     ecefyi = CSy(dt.astype(int))*1e3
     ecefzi = CSz(dt.astype(int))*1e3
@@ -297,7 +296,6 @@ def gpsSatPositionSP3(fsp3, dt, sv=None, rx_position=None, coords='xyz'):
     if coords == 'xyz':
         return np.array([ecefxi, ecefyi, ecefzi])
     else:
-        
         AER = ecef2aer(x=ecefxi, y=ecefyi, z=ecefzi,
                        lon0=rx_position[1], lat0=rx_position[0], h0=rx_position[2])
         return np.array(AER)
@@ -363,38 +361,9 @@ def gpsSatPosition(fnav, dt, sv=None, rx_position=None, coords='xyz'):
         return np.array([A,E,R])
 
 #%% Sat positioning 
-#def getSatellitePosition(rx_xyz,sv,obstimes,navfn,cs='wsg84', navdict=False,
-#                         dtype='pyrinex'):
-#    """
-#    Sebastijan Mrak
-#    Function returns satellite position in AER and LLA coordinates for a chosen
-#    satellite vehicle and obseravtion times. Rx_xyz is a receiver position in 
-#    ECEF CS, as an np. array. Obstimes gat to be in format pandas.to_datetime
-#    """
-#
-#    rec_lat, rec_lon, rec_alt = ecef2geodetic(rx_xyz[0], rx_xyz[1], rx_xyz[2])
-#    if dtype == 'pyrinex':
-#        return
-##        navdata = pyRinex.readRinexNav(navfn)
-##        xyz = getSatXYZ(navdata, sv, obstimes)
-#    elif dtype == 'georinex':
-#        navdata = gr.load(navfn).sel(sv=sv)
-#        xyz = getSatXYZ2(navdata, obstimes)
-#    az, el, r = ecef2aer(xyz[:,0],xyz[:,1],xyz[:,2],rec_lat, rec_lon, rec_alt)
-#    lat, lon, alt = ecef2geodetic(xyz[:,0],xyz[:,1],xyz[:,2])
-#    
-#    if cs == 'wsg84':
-#        return [lat, lon, alt]
-#    elif cs == 'aer':
-#        return [az, el, r]
-#    elif cs == 'xyz':
-#        return [xyz[:,0], xyz[:,1], xyz[:,2]]
-#    else:
-#        print ('Wrong frame of reference. Type "wsg84" or "aer".')
-#        return 0;
-##    
-def getIonosphericPiercingPoints(rx_xyz,sv,obstimes,ipp_alt, navfn,
-                                 cs='wsg84', rx_xyz_coords='xyz'):
+
+def getIonosphericPiercingPoints(rx_xyz, sv, obstimes, ipp_alt, navfn,
+                                 cs='wsg84', rx_xyz_coords='xyz', el0=0):
     """
     Sebastijan Mrak
     Function returns a list of Ionospheric Piersing Point (IPP) trajectory in WSG84
@@ -408,17 +377,26 @@ def getIonosphericPiercingPoints(rx_xyz,sv,obstimes,ipp_alt, navfn,
     if rx_xyz_coords == 'xyz':
         rec_lat, rec_lon, rec_alt = ecef2geodetic(rx_xyz[0], rx_xyz[1], rx_xyz[2])
     else:
-        rec_lon = rx_xyz[0]
-        rec_lat = rx_xyz[1]
+        if not isinstance(rx_xyz, list): rx_xyz = list(rx_xyz)
+        if len(rx_xyz) == 2: rx_xyz.append(0)
+        assert len(rx_xyz) == 3
+        
+        rec_lat = rx_xyz[0]
+        rec_lon = rx_xyz[1]
         rec_alt = rx_xyz[2]
+        rx_xyz = geodetic2ecef(lat = rec_lon, lon = rec_lat, alt = rec_alt)
     
     if sv[0] == 'G':
-        xyz = gpsSatPosition(navfn, obstimes, sv=sv, rx_position=rx_xyz, coords='xyz')
+        if navfn.endswith('n'):
+            xyz = gpsSatPosition(navfn, obstimes, sv=sv, rx_position=rx_xyz, coords='xyz')
+        elif navfn.endswith('sp3'):
+            xyz = gpsSatPositionSP3(navfn, obstimes, sv=sv, rx_position=rx_xyz, coords='xyz')
         az,el,r = ecef2aer(xyz[0,:],xyz[1,:],xyz[2,:],rec_lat, rec_lon, rec_alt)
         aer_vector = np.array([az, el, r])
+        
         r_new = []
         for i in range(len(el)):
-            if el[i] > 0:
+            if el[i] > el0:
                 fm = np.sin(np.radians(el[i]))
                 r_new.append(ipp_alt / fm)
             else:
@@ -917,27 +895,33 @@ def dataFromNC(fnc,fnav, sv, fsp3=None,
         D['ipp_alt'] = ipp_alt
     return D
 
-def processTEC(obs, sv, Ts = 30, frequency = 2, H=None, elevation=None, sat_bias=None):
+def processTEC(obs, sv, Ts = 30, frequency = 2, H=None, elevation=None, 
+               sat_bias=None, vtec = False, F_out=False):
     if isinstance(obs, dict):
-        stec = slantTEC(obs['C1'], obs['P2'], 
+        tec = slantTEC(obs['C1'], obs['P2'], 
                         obs['L1'], obs['L2'], 
                         frequency = frequency)
     elif isinstance(obs, xarray.Dataset):
-        stec = slantTEC(obs['C1'].values, obs['P2'].values, 
-                        obs['L1'].values, obs['L2'].values, 
-                        frequency = frequency)
+        tec = getPhaseCorrTEC(obs['L1'].values, obs['L2'].values, 
+                        obs['C1'].values, obs['P2'].values, 
+                        )
     if sat_bias is not None:
-        stec += sat_bias
+        tec += sat_bias
     assert elevation is not None
     assert H is not None
-    F = getMappingFunction(elevation, h = H)
-    vtec = stec * F
-    tecd = uf.getPlainResidual(vtec, Ts=Ts)
+    if vtec:
+        F = getMappingFunction(elevation, h = H)
+        tec = tec * F
+    
+    dtec = uf.getPlainResidual(tec, Ts=Ts)
 #    x = np.arange(tecd.shape[0])
 #    mask= np.isnan(tecd)
 #    tecdp = np.copy(tecd)
 #    tecdp[mask] = np.interp(x[mask], x[~mask], tecd[~mask])
 #    tecps = uf.hpf(tecdp)
     
-    return vtec, tecd, F
+    if F_out:
+        return tec, dtec, F
+    else:
+        return tec, dtec
     
