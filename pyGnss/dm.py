@@ -252,7 +252,7 @@ def getTimeSeries(time: Union[list, np.ndarray] = None,
 
 def tdft(t,y,T=30,nfft=1024,Nw=240,Nskip=1,window='hamming'):
     Wn = signal.get_window(window,Nw)
-    f = np.fft.fftfreq(nfft,d=T) * 1e3 # to mHz
+    f = np.fft.fftfreq(nfft,d=T) # to mHz
     f = f[1:int(nfft/2)]
     
     Treducted = t[:-Nw]

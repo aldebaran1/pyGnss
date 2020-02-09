@@ -14,11 +14,9 @@ def getROTI(tec, length):
     of the provided TEC on the moving window of the length 'length'. It returns 
     the ROTI as a numpy array data type.
     """
-    roti = []    
-    for i in range(len(tec)-length):
-        roti.append(np.std(tec[i:i+length]))
-    
-    return np.array(roti)
+    rot = np.hstack((np.nan, np.diff(tec)))
+    roti = sigmaTEC(rot, length)
+    return roti
     
 
 def phaseScintillationIndex(data, N):
