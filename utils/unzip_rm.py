@@ -18,7 +18,7 @@ def unzip(f, timeout=5, delete=True):
             if delete:
                 subprocess.call('gzip -d -f -q ' + f, shell=True,timeout=timeout)
             else:
-                subprocess.call('gzip -f -q ' + f, shell=True,timeout=timeout)
+                subprocess.call('gzip -d -f -q -k ' + f, shell=True,timeout=timeout)
         except:
             print ('Problems with: ',tail)
     elif platform.system() == 'Windows':
