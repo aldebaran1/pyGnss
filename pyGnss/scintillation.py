@@ -33,16 +33,19 @@ def phaseScintillationIndex(data, N):
             y[i] = np.nanstd(data[i:i+N])
     return y
     
-def AmplitudeScintillationIndex(data, N):
+def AmplitudeScintillationIndex(x, N):
     """
     Sebastijan Mrak
     GNSS Amplitude scintillation index for the interval of the length 'N' samples
     """
-    y = np.nan * np.zeros(data.shape[0])
-    for i in range(data.shape[0] - N):
-        if np.sum(np.isfinite(data[i:i+N])) > 2:
-#            y[i] = np.sqrt( (np.nanmean(np.square(data[i:i+N]))-np.nanmean(data[i:i+N])**2)  / np.nanmean(data[i:i+N])**2 )
-            y[i] = np.sqrt(np.nanvar(data[i:i+N])) / np.nanmean(data[i:i+N])
+    idx = np.isnan(x)
+    n2 = int(N/2)
+    iterate = np.arange(n2, x.size-n2)
+    y = np.nan * np.copy(x)
+    for i in iterate:
+        if np.sum(np.isfinite(x[i-n2:i+n2])) > N/4:
+            y[i] = np.sqrt(np.nanvar(x[i-n2:i+n2])) / np.nanmean(x[i-n2:i+n2])
+    y[idx] = np.nan
     return y
 
 def sigmaTEC(x, N):
@@ -51,9 +54,8 @@ def sigmaTEC(x, N):
     iterate = np.arange(n2, x.size-n2)
     y = np.nan * np.copy(x)
     for i in iterate:
-        chunk = x[i-n2:i+n2]
-        if np.sum(np.isfinite(chunk)) > N/4:
-            y[i] = np.nanstd(chunk)
+        if np.sum(np.isfinite(x[i-n2:i+n2])) > N/4:
+            y[i] = np.nanstd(x[i-n2:i+n2])
     y[idx] = np.nan
     return y
 
