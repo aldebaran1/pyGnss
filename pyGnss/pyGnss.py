@@ -6,16 +6,16 @@ Created on Sat Oct 15 17:28:01 2016
 smrak@bu.edu
 """
 import numpy as np
-from datetime import timedelta
+from datetime import datetime, timedelta
 from scipy import interpolate
 from pymap3d import ecef2geodetic,ecef2aer,aer2geodetic,geodetic2ecef
-import xarray
-import datetime
+import xarray, os
 import matplotlib.pyplot as plt
 from pandas import Timestamp
 import georinex as gr
 from pyGnss import gnssUtils as uf
 from glob import glob
+from scipy.optimize import least_squares
 
 #constnats for GPS
 f1 = 1575420000
@@ -24,7 +24,7 @@ f5 = 1176450000
 c0 = 299792458
 freq = {'1': f1, '2': f2, '5': f5}
 
-def getSatBias(fn):
+def getSatBias(fn, sv=None):
     import os
     if os.path.isdir(fn):
         fn = glob(fn + '*.**i')
@@ -45,7 +45,10 @@ def getSatBias(fn):
                     i += 1
                 f.close()
                 break
-    return svbias
+    if sv is None:
+        return svbias
+    else:
+        return svbias[sv]
 
 # %% TEC
 def getPRNSlantTEC(P1, P2, units='m'):
@@ -762,7 +765,7 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
     leap_seconds = uf.getLeapSeconds(nav)
     obstimes64 = D.time.values
     times = np.array([Timestamp(t).to_pydatetime() for t in obstimes64]) - \
-                        datetime.timedelta(seconds = leap_seconds)
+                        timedelta(seconds = leap_seconds)
     # define tlim ie. skip
     if tlim is not None:
         s = ((times>=tlim[0]) & (times<=tlim[1]))
@@ -862,12 +865,14 @@ def dataFromNC(fnc,fnav, sv, fsp3=None,
     D['time'] = np.array([np.datetime64(ttt) for ttt in D.time.values])
     if tlim is not None:
         if len(tlim) == 2:
-            D = D.where(np.logical_and(D.time >= np.datetime64(tlim[0]), 
-                                       D.time <= np.datetime64(tlim[1])), drop=True)
+            t0 = tlim[0] + timedelta(seconds=leap_seconds)
+            t1 = tlim[1] + timedelta(seconds=leap_seconds)
+            D = D.where(np.logical_and(D.time >= np.datetime64(t0), 
+                                       D.time <= np.datetime64(t1)), 
+                                       drop=True)
     obstimes64 = D.time.values
-    
     dt = np.array([Timestamp(t).to_pydatetime() for t in obstimes64]) - \
-               datetime.timedelta(seconds = leap_seconds)
+               timedelta(seconds = leap_seconds)
     if fsp3 is None:
         aer = gpsSatPosition(fnav, dt, sv=sv, rx_position=D.position, coords='aer')
     else:
@@ -896,7 +901,7 @@ def dataFromNC(fnc,fnav, sv, fsp3=None,
     return D
 
 def processTEC(obs, sv, Ts = 30, frequency = 2, H=None, elevation=None, 
-               sat_bias=None, vtec = False, F_out=False):
+               rx_bias=None, vtec = False, F_out=False, sat_bias=None):
     if isinstance(obs, dict):
         tec = slantTEC(obs['C1'], obs['P2'], 
                         obs['L1'], obs['L2'], 
@@ -905,11 +910,20 @@ def processTEC(obs, sv, Ts = 30, frequency = 2, H=None, elevation=None,
         tec = getPhaseCorrTEC(obs['L1'].values, obs['L2'].values, 
                         obs['C1'].values, obs['P2'].values, 
                         )
+        
     if sat_bias is not None:
-        tec += sat_bias
+        try:
+            b = 1 * getSatBias(sat_bias, sv=sv)
+        except:
+            b = 0
+    else:
+        b = 0
+    if rx_bias is not None:
+        b += rx_bias
     assert elevation is not None
     assert H is not None
     if vtec:
+        tec += b
         F = getMappingFunction(elevation, h = H)
         tec = tec * F
     
@@ -925,3 +939,112 @@ def processTEC(obs, sv, Ts = 30, frequency = 2, H=None, elevation=None,
     else:
         return tec, dtec
     
+def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6):
+    D = gr.load(fnc)
+    stec = np.nan * np.zeros((D.time.values.size, D.sv.size))
+    for isv, sv in enumerate(D.sv.values):
+        
+        if fsp3 is not None:
+            dt = np.array([np.datetime64(ttt) for ttt in D.time.values])
+            assert os.path.exists(fsp3)
+            aer = getIonosphericPiercingPoints(D.position, sv, dt, 
+                                                   ipp_alt=H, navfn=fsp3,
+                                                   cs='aer', rx_xyz_coords='xyz')
+            idel = (aer[1] >= el_mask)
+        else:
+            idel = np.ones(D.time.values.size, dtype=bool)
+        stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
+                                         P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv],
+                                         maxgap=maxgap, maxjump=maxjump)
+    return stec
+
+def getVTEC(fnc, fsp3, dcb=None, jplg_file=None, el_mask=30, H=350,
+            tskip=None, maxgap=1, maxjump=1.6, tec_shift=None,
+            return_mapping_function=False, return_aer=False):
+    if tec_shift is None: tec_shift = 0
+    if dcb is None:
+#        assert jplg_file is not None
+#        assert os.path.exists(jplg_file)
+        dcb = getDCB(fnc, fsp3, jplg_file=jplg_file, el_mask=30, H=350,
+                 tskip=None, maxgap=1, maxjump=1.6)
+    D = gr.load(fnc)
+    assert dcb.size == D.sv.size
+    dt = np.array([np.datetime64(ttt) for ttt in D.time.values])
+    vtec = np.nan * np.zeros((dt.size, D.sv.size))
+    if return_mapping_function:
+        F = np.nan * np.zeros((dt.size, D.sv.size))
+    if return_aer:
+        AER = np.nan * np.zeros((dt.size, D.sv.size, 3))
+    for isv, sv in enumerate(D.sv.values):
+        aer = getIonosphericPiercingPoints(D.position, sv, dt, 
+                                           ipp_alt=H, navfn=fsp3,
+                                           cs='aer', rx_xyz_coords='xyz')
+        idel = (aer[1] >= el_mask)
+        if return_mapping_function:
+            F[idel, isv] = getMappingFunction(aer[1][idel], h=H)
+        vtec[idel, isv] = (getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
+                                     P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv],
+                                     maxgap=maxgap, maxjump=maxjump) - dcb[isv] + tec_shift) * getMappingFunction(aer[1][idel], h=H)
+        if return_aer:
+            AER[idel, isv, 0] = aer[0][idel]
+            AER[idel, isv, 1] = aer[1][idel]
+            AER[idel, isv, 2] = aer[2][idel]
+    D.close()
+    if return_mapping_function and (not return_aer):
+        return vtec, F
+    elif return_mapping_function and return_aer:
+        return vtec, F, AER
+    elif (not return_mapping_function) and return_aer:
+        return vtec, AER
+    else:
+        return vtec
+        
+def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350, 
+            tskip=None, maxgap=1, maxjump=1.6):
+    
+    def _fun(p, stec, F):
+        vtec = (stec - p) * F
+        ret = np.nansum(np.nanstd(vtec, axis=1)**2)
+        return ret
+    D = gr.load(fnc)
+    dt0 = np.array([np.datetime64(ttt) for ttt in D.time.values])
+    if tskip is None:
+        target = 60
+        ts = np.int16(np.timedelta64(np.diff(dt0)[0], 's'))
+        tskip = int(target/ts)
+    dt = dt0[::tskip]
+    stec = np.nan * np.zeros((dt.size, D.sv.size))
+    F = np.nan * np.zeros((dt.size, D.sv.size))
+    
+    sb = np.ones(D.sv.size)
+    
+    for isv, sv in enumerate(D.sv.values):
+        aer = getIonosphericPiercingPoints(D.position, sv, dt, ipp_alt=H, 
+                                           navfn=fsp3, cs='aer', 
+                                           rx_xyz_coords='xyz')
+        idel = (aer[1] >= el_mask)
+        F[idel, isv] = getMappingFunction(aer[1][idel], h=H)
+        stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[::tskip][idel,isv], L2=D.L2.values[::tskip][idel,isv],
+                                     P1=D.C1.values[::tskip][idel,isv], P2=D.P2.values[::tskip][idel,isv],
+                                     maxgap=maxgap, maxjump=maxjump)
+        if jplg_file is not None:
+            sb[isv] = getSatBias(jplg_file, sv)
+    # LEAST sQUARES FIT
+    x0 = np.empty(D.sv.size) if jplg_file is None else sb
+    sb_lsq = least_squares(_fun, x0, args=(stec, F), xtol=1e-5, gtol=1e-5, 
+                       diff_step=1e-4, loss='cauchy')
+    D.close()
+    return sb_lsq.x
+
+def getCNR(D, fsp3=None, el_mask=30, H=350):
+    CNO = D.S1.values
+    if fsp3 is not None:
+        assert os.path.exists(fsp3)
+        dt = np.array([np.datetime64(ttt) for ttt in D.time.values]).astype('datetime64[s]').astype(datetime)
+        for isv, sv in enumerate(D.sv.values):
+            aer = getIonosphericPiercingPoints(D.position, sv, dt, 
+                                                      ipp_alt=H, navfn=fsp3,
+                                                      cs='aer', rx_xyz_coords='xyz')
+            idel = (aer[1] >= el_mask)
+            CNO[~idel, isv] = np.nan
+    return CNO

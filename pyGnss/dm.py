@@ -50,8 +50,8 @@ def fillPixels(im, N=1):
         skip = int(np.floor((2+n)/2))
         iterate_j_f = np.arange(0,im.shape[1],skip) if (n%2 == 0) else np.arange(im.shape[1]-1,-1,-skip)
         iterate_j_b = np.arange(0,im.shape[1],skip) if (n%2 == 1) else np.arange(im.shape[1]-1,-1,-skip)
-        iterate_i_f = np.arange(0, int(im.shape[0] * 0.6), skip) if (n % 2 == 0) else np.arange(im.shape[0]-1, int(im.shape[1] * 0.4), -skip)
-        iterate_i_b = np.arange(0, int(im.shape[1] * 0.6), skip) if (n % 2 == 1) else np.arange(im.shape[1]-1, int(im.shape[1] * 0.4), -skip)
+        iterate_i_f = np.arange(0, int(im.shape[0] * 0.6), skip) if (n % 2 == 0) else np.arange(im.shape[0]-1, int(im.shape[0] * 0.4), -skip)
+        iterate_i_b = np.arange(0, int(im.shape[0] * 0.6), skip) if (n % 2 == 1) else np.arange(im.shape[0]-1, int(im.shape[0] * 0.4), -skip)
         for i in iterate_i_f:
             for j in iterate_j_f:
                 # Check if the pixel is dead, i.e. empty
@@ -106,10 +106,7 @@ def keogram(time: np.ndarray=None,
         time = time[idT]
         im = im[idT]
         im = im[::imskip]
-    # Fill Pixel:
-    if fillPixel is not None:
-        assert isinstance(fillPixel, int)
-        im[0] = fillPixels(np.squeeze(im), N=fillPixel)
+    
     # Time dimension
     if isinstance(time, (list, np.ndarray)):
         tlen = int(time.shape[0] / imskip)
@@ -123,7 +120,7 @@ def keogram(time: np.ndarray=None,
             ix = abs(xgrid - Xt).argmin()
             idX[ix] = True
     elif isinstance(Xt, (list, np.ndarray)):
-        idX = (xgrid >= Xt.min()) & (xgrid <= Xt.max())
+        idX = (xgrid >= min(Xt)) & (xgrid <= max(Xt))
     if isinstance(Yt, (int, float, np.int64)):
         idY = (ygrid >= Yt) & (ygrid <= Yt)
         if np.sum(idY) == 0: 
@@ -131,7 +128,7 @@ def keogram(time: np.ndarray=None,
             iy = abs(ygrid - Yt).argmin()
             idY[iy] = True
     elif isinstance(Yt, (list, np.ndarray)):
-        idY = (ygrid >= Yt.min()) & (ygrid <= Yt.max())
+        idY = (ygrid >= min(Yt)) & (ygrid <= max(Yt))
     # Filter in space if doing for an arbitrary line
     if line == True:
         mask = np.full((xgrid.shape[0], ygrid.shape[0]), False, dtype = bool)
@@ -174,10 +171,15 @@ def keogram(time: np.ndarray=None,
                 tmp[i] = np.nanmean(nbg)
             keo[ii] = tmp
     
+    # Fill Pixel:
+    if fillPixel is not None:
+        assert isinstance(fillPixel, int)
+        keo = fillPixels(keo, N=fillPixel)
+    
     if filter == 'gaussian':
         keo = ndimage.gaussian_filter(keo, 0.1)
     elif filter =='median':
-        keo = ndimage.median_filter(keo, 3)
+        keo = ndimage.median_filter(keo, 5)
     else:
         pass
     
@@ -250,7 +252,7 @@ def getTimeSeries(time: Union[list, np.ndarray] = None,
     
     return {'t': time, 'y': timeseries}
 
-def tdft(t,y,T=30,nfft=1024,Nw=240,Nskip=1,window='hamming'):
+def tdft(t,y,T=30,nfft=1024,Nw=240,Nskip=1,window='hanning'):
     Wn = signal.get_window(window,Nw)
     f = np.fft.fftfreq(nfft,d=T) # to mHz
     f = f[1:int(nfft/2)]
