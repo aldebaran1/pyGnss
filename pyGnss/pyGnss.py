@@ -64,14 +64,14 @@ def getPRNSlantTEC(P1, P2, units='m'):
     """     
     if units == 'm':
         sTEC = ((1/40.3) * (( pow(f2, 2) * pow(f1, 2) ) / 
-                (pow(f2, 2) - pow(f1, 2))) * (P1 - P2)) / pow(10,16)
+                (pow(f1, 2) - pow(f2, 2))) * (P2 - P1)) / pow(10,16)
     elif units == 'rad':
         sTEC = ((c0/(40.3*2*np.pi)) * (( pow(f2, 2) * pow(f1, 2) ) / 
-                (pow(f2, 2) - pow(f1, 2))) * (P1/f1 - P2/f2)) / pow(10,16)
+                (pow(f1, 2) - pow(f2, 2))) * (P2/f2- P1/f1)) / pow(10,16)
             
     elif units == 'cycle':
         sTEC = ((c0/(40.3)) * (( pow(f2, 2) * pow(f1, 2) ) / 
-                (pow(f2, 2) - pow(f1, 2))) * (P1/f1 - P2/f2)) / pow(10,16)        
+                (pow(f1, 2) - pow(f2, 2))) * (P2/f2 - P1/f1)) / pow(10,16)        
         
     return sTEC
     
@@ -90,13 +90,13 @@ def getPSlantTEC(L1, L2, units = 'cycle'):
     """
     if units == 'cycle':
         sTEC = ((c0/40.3) * (( pow(f2, 2) * pow(f1, 2) ) / 
-                (pow(f2, 2) - pow(f1, 2))) * (L1/f1 - L2/f2)) / pow(10,16)
+                (pow(f1, 2) - pow(f2, 2))) * (L1/f1 - L2/f2)) / pow(10,16)
     elif units == 'rad':
         sTEC = ((c0/(40.3*2*np.pi)) * (( pow(f2, 2) * pow(f1, 2) ) / 
-                (pow(f2, 2) - pow(f1, 2))) * (L1/f1 - L2/f2)) / pow(10,16)
+                (pow(f1, 2) - pow(f2, 2))) * (L1/f1 - L2/f2)) / pow(10,16)
     elif units == 'm':
         sTEC = ((1/40.3) * (( pow(f2, 2) * pow(f1, 2) ) / 
-                (pow(f2, 2) - pow(f1, 2))) * (L1 - L2)) / pow(10,16)
+                (pow(f1, 2) - pow(f2, 2))) * (L1 - L2)) / pow(10,16)
         
     return sTEC
 
@@ -1000,7 +1000,8 @@ def getVTEC(fnc, fsp3, dcb=None, jplg_file=None, el_mask=30, H=350,
         return vtec
         
 def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350, 
-            tskip=None, maxgap=1, maxjump=1.6):
+            tskip=None, maxgap=1, maxjump=1.6,
+            return_mapping_function=False, return_aer=False):
     
     def _fun(p, stec, F):
         vtec = (stec - p) * F
@@ -1017,7 +1018,8 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
     F = np.nan * np.zeros((dt.size, D.sv.size))
     
     sb = np.ones(D.sv.size)
-    
+    if return_aer:
+        AER = np.nan * np.zeros((dt.size, D.sv.size, 3))
     for isv, sv in enumerate(D.sv.values):
         aer = getIonosphericPiercingPoints(D.position, sv, dt, ipp_alt=H, 
                                            navfn=fsp3, cs='aer', 
@@ -1029,12 +1031,24 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
                                      maxgap=maxgap, maxjump=maxjump)
         if jplg_file is not None:
             sb[isv] = getSatBias(jplg_file, sv)
+        if return_aer:
+            AER[idel, isv, 0] = aer[0][idel]
+            AER[idel, isv, 1] = aer[1][idel]
+            AER[idel, isv, 2] = aer[2][idel]
     # LEAST sQUARES FIT
     x0 = np.empty(D.sv.size) if jplg_file is None else sb
     sb_lsq = least_squares(_fun, x0, args=(stec, F), xtol=1e-5, gtol=1e-5, 
                        diff_step=1e-4, loss='cauchy')
     D.close()
-    return sb_lsq.x
+    
+    if return_mapping_function and (not return_aer):
+        return sb_lsq.x, F
+    elif return_mapping_function and return_aer:
+        return sb_lsq.x, F, AER
+    elif (not return_mapping_function) and return_aer:
+        return sb_lsq.x, AER
+    else:
+        return sb_lsq.x
 
 def getCNR(D, fsp3=None, el_mask=30, H=350):
     CNO = D.S1.values
