@@ -1016,25 +1016,34 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
     dt = dt0[::tskip]
     stec = np.nan * np.zeros((dt.size, D.sv.size))
     F = np.nan * np.zeros((dt.size, D.sv.size))
-    
     sb = np.ones(D.sv.size)
     if return_aer:
-        AER = np.nan * np.zeros((dt.size, D.sv.size, 3))
+        AER = np.nan * np.zeros((dt0.size, D.sv.size, 3))
+        
+    if return_mapping_function:
+        F0 = np.nan * np.zeros((dt0.size, D.sv.size))
     for isv, sv in enumerate(D.sv.values):
         aer = getIonosphericPiercingPoints(D.position, sv, dt, ipp_alt=H, 
                                            navfn=fsp3, cs='aer', 
                                            rx_xyz_coords='xyz')
         idel = (aer[1] >= el_mask)
         F[idel, isv] = getMappingFunction(aer[1][idel], h=H)
+        if return_mapping_function or return_aer:
+            aer0 = getIonosphericPiercingPoints(D.position, sv, dt0, ipp_alt=H, 
+                                           navfn=fsp3, cs='aer', 
+                                           rx_xyz_coords='xyz')
+            idel0 = (aer0[1] >= el_mask)
         stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[::tskip][idel,isv], L2=D.L2.values[::tskip][idel,isv],
                                      P1=D.C1.values[::tskip][idel,isv], P2=D.P2.values[::tskip][idel,isv],
                                      maxgap=maxgap, maxjump=maxjump)
         if jplg_file is not None:
             sb[isv] = getSatBias(jplg_file, sv)
+        if return_mapping_function:
+            F0[idel0, isv] = getMappingFunction(aer0[1][idel0], h=H)
         if return_aer:
-            AER[idel, isv, 0] = aer[0][idel]
-            AER[idel, isv, 1] = aer[1][idel]
-            AER[idel, isv, 2] = aer[2][idel]
+            AER[idel0, isv, 0] = aer0[0][idel0]
+            AER[idel0, isv, 1] = aer0[1][idel0]
+            AER[idel0, isv, 2] = aer0[2][idel0]
     # LEAST sQUARES FIT
     x0 = np.empty(D.sv.size) if jplg_file is None else sb
     sb_lsq = least_squares(_fun, x0, args=(stec, F), xtol=1e-5, gtol=1e-5, 
@@ -1042,9 +1051,9 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
     D.close()
     
     if return_mapping_function and (not return_aer):
-        return sb_lsq.x, F
+        return sb_lsq.x, F0
     elif return_mapping_function and return_aer:
-        return sb_lsq.x, F, AER
+        return sb_lsq.x, F0, AER
     elif (not return_mapping_function) and return_aer:
         return sb_lsq.x, AER
     else:
