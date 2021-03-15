@@ -8,7 +8,9 @@ Created on Fri Mar  3 13:19:38 2017
 
 from six.moves.urllib.parse import urlparse
 import ftplib
+from typing import Union
 import numpy as np
+import requests, io
 import yaml
 from glob import glob
 import os
@@ -22,8 +24,8 @@ def download(F, rx, filename,force=False):
         try:
             with open(filename, 'wb') as h:
                 F.retrbinary('RETR {}'.format(rx), h.write)
-        except:
-            print ("Couldn't download {}".format(rx))
+        except Exception as e:
+            print (e)
         return
     
     # Check is destination directory exists?
@@ -32,7 +34,10 @@ def download(F, rx, filename,force=False):
     if not os.path.exists(path):
         #NO? Well, create the directory. 
         try:
-            subprocess.call('mkdir -p {}'.format(path), shell=True)
+            if platform.system() == 'Linux':
+                subprocess.call('mkdir -p {}'.format(path), shell=True)
+            elif platform.system() == 'Windows':
+                subprocess.call('mkdir "{}"'.format(path), shell=True)
         except:
             print ('Cant make the directory')
     # Does the file already exists in the destination directory?
@@ -112,7 +117,7 @@ def getSingleRxUrl(year, doy, F, db, rxn, hr=False):
     elif db == 'unavco' and hr:
         if isinstance(rxn, str):
             match = rxn + doy + '0.'+year[-2:]+'d.Z'
-        elif isinstance(rxn, list):
+        elif isinstance(rxn, (list,np.ndarray)):
             match = [r + doy + '0.'+year[-2:]+'d.Z' for r in rxn]
             match = np.array(match)
         ds = [line.split()[-1] for line in d]
@@ -128,7 +133,8 @@ def getSingleRxUrl(year, doy, F, db, rxn, hr=False):
 def getStateList(year, doy, F, db, rxn=None, hr=False):
     if isinstance(rxn, str):
         stations = getSingleRxUrl(year,doy,F,db,rxn=rxn, hr=hr)
-    elif isinstance(rxn, list):
+        print (stations)
+    elif isinstance(rxn, (list, np.ndarray)):
         stations = getSingleRxUrl(year,doy,F,db,rxn=rxn, hr=hr)
         print (stations)
     else:
@@ -152,11 +158,12 @@ def getStateList(year, doy, F, db, rxn=None, hr=False):
         elif db == 'cors':
             for line in d:
                 arg = line.split()[-1]
+                print (arg)
                 if (len(arg) == 4):
                     try:
-                        rx = arg+str(doy)+'0.'+year[-2:]+'d.Z'
+                        rx = arg+str(doy)+'0.'+year[-2:]+'d.gz'
                         stations.append(rx)
-                    except Exception as e:
+                    except:
                         pass
         elif db == 'euref':
             for line in d:
@@ -200,7 +207,8 @@ def getRinexObs(date,
     elif platform.system() == 'Windows':
         des = '\\'
     # Dictionary with complementary FTP url addresses
-    urllist = {'cddis': 'ftp://cddis.gsfc.nasa.gov/gnss/data/daily/',
+    urllist = {#'cddis': 'ftp://cddis.gsfc.nasa.gov/gnss/data/daily/',
+               'cddis': 'https://cddis.nasa.gov/archive/gnss/data/daily/',
                'cddishr': 'ftp://ftp.cddis.eosdis.nasa.gov/gps/data/highrate/',
                'cors':  'ftp://geodesy.noaa.gov/cors/rinex/',
                'euref': 'ftp://epncb.oma.be/pub/obs/',
@@ -260,93 +268,101 @@ def getRinexObs(date,
                 print ('Cant make the directory')
     # Reasign dllist from yaml into rx [list]
     if dllist is not None and isinstance(dllist,str):
-        if dllist[-5:] == '.yaml':
-            stream = yaml.load(open(dllist, 'r'))
-            rx = stream.get('dllist')
+        if dllist.endswith('.yaml'):
+            stream = yaml.load(open(dllist, 'r'), Loader=yaml.SafeLoader)
+            rx = np.array(stream.get('rx'))
+            if len(rx.shape) > 1:
+                rx = rx[:,0]
         else:
             exit()
-            
-    # Open a connection to the FTP address
-    with ftplib.FTP(url[1],'anonymous','guest',timeout=45) as F:
-        YY = str(year)[2:]
+    #CDDIS
+    if db == 'cddis':
+        url = urllist[db] + str(year) + '/' + str(doy) + '/' + str(year)[2:] + 'd/'
+        r = requests.get(url)
+        for rr in r:
+            print (rr.decode())
         
-        # cd to the directory with observation rinex data
-        if db == 'cddis':
-            if hr:
-                rpath = url[2] + '/' + year + '/' + doy + '/'+YY+'d/'
+        with open(odir, 'wb') as fd:
+            for chunk in r.iter_content(chunk_size=1000):
+                fd.write(chunk)
+        fd.close()
+
+    else:
+        # Open a connection to the FTP address
+        with ftplib.FTP(url[1],'anonymous','guest',timeout=45) as F:
+            YY = str(year)[2:]
+            
+            # cd to the directory with observation rinex data
+        #        if db == 'cddis':
+        #            if hr:
+        #                rpath = url[2] + '/' + year + '/' + doy + '/'+YY+'d/'
+        #                F.cwd(rpath)
+        #                
+        #                hrsdum = []
+        #                F.retrlines('LIST', hrsdum.append)
+        #                hrs = [line.split()[-1] for line in hrsdum]
+        #                for hour in hrs:
+        #                    try:
+        #                        F.cwd(rpath + hour + '/')
+        #                    except:
+        #                        pass
+        #                    rxlist = getStateList(year, doy, F, db, rxn=rx, hr=hr)
+        #                    # Download the data
+        #                    print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+        #                    for urlrx in rxlist:
+        #                        download(F, urlrx, odir+urlrx,force=force)
+        #            else:
+        #                rpath = url[2] + '/' + year + '/' + doy + '/'+YY+'o/'
+        #                F.cwd(rpath)
+        #                 Get the name of all avaliable receivers in the direcotry
+        #                rxlist = getStateList(year, doy, F, db, rxn=rx, hr=hr)
+                    # Download the data
+        #                print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+        #                for urlrx in rxlist:
+                        # urlrx must in in a format "nnnDDD0.YYo.xxx"
+        #                    download(F, urlrx, odir+urlrx,force=force)
+            if db == 'cors':
+                rpath = url[2] + '/' + year + '/' + doy + '/'
                 F.cwd(rpath)
-                
-                hrsdum = []
-                F.retrlines('LIST', hrsdum.append)
-                hrs = [line.split()[-1] for line in hrsdum]
-                for hour in hrs:
-                    try:
-                        F.cwd(rpath + hour + '/')
-                    except:
-                        pass
+                # Get the name of all avaliable receivers in the direcotry
+                rxlist = getStateList(year, doy, F, db, rxn=rx)
+                # Download the data
+                print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+                for urlrx in rxlist:
+                    print (urlrx)
+                    F.cwd(rpath+urlrx[:4]+'/')
+                    download(F, urlrx, odir+urlrx,force=force)
+            elif db == 'euref':
+                rpath = url[2] + '/' + year + '/' + doy + '/'
+                F.cwd(rpath)
+                # Get the name of all avaliable receivers in the direcotry
+                rxlist = getStateList(year, doy, F, db, rxn=rx)
+                # Download the data
+                print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+                for urlrx in rxlist:
+                    # urlrx must in in a format "nnnDDD0.YYo.xxx"
+                    download(F, urlrx, odir+urlrx,force=force)
+            elif db == 'unavco':
+                rpath = url[2] + '/' + year + '/' + doy + '/'
+                F.cwd(rpath)
+                # Get the name of all avaliable receivers in the direcotry
+                if not hr:
                     rxlist = getStateList(year, doy, F, db, rxn=rx, hr=hr)
                     # Download the data
                     print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
                     for urlrx in rxlist:
+                        # urlrx must in in a format "nnnDDD0.YYo.xxx"
                         download(F, urlrx, odir+urlrx,force=force)
-            else:
-                rpath = url[2] + '/' + year + '/' + doy + '/'+YY+'o/'
-                F.cwd(rpath)
-                # Get the name of all avaliable receivers in the direcotry
-                rxlist = getStateList(year, doy, F, db, rxn=rx, hr=hr)
-                # Download the data
-                print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-                for urlrx in rxlist:
-                    # urlrx must in in a format "nnnDDD0.YYo.xxx"
-                    download(F, urlrx, odir+urlrx,force=force)
-        elif db == 'cors':
-            rpath = url[2] + '/' + year + '/' + doy + '/'
-            F.cwd(rpath)
-            # Get the name of all avaliable receivers in the direcotry
-            rxlist = getStateList(year, doy, F, db, rxn=rx)
-            # Download the data
-            print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-            for urlrx in rxlist:
-                try:
-                    F.cwd(rpath+urlrx[:4]+'/')
-                    # urlrx must in in a format "nnnDDD0.YYo.xxx"
-                    download(F, urlrx, odir+urlrx,force=force)
-                except:
-                    pass
-        elif db == 'euref':
-            rpath = url[2] + '/' + year + '/' + doy + '/'
-            F.cwd(rpath)
-            # Get the name of all avaliable receivers in the direcotry
-            rxlist = getStateList(year, doy, F, db, rxn=rx)
-            # Download the data
-            print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-            for urlrx in rxlist:
-                # urlrx must in in a format "nnnDDD0.YYo.xxx"
-                download(F, urlrx, odir+urlrx,force=force)
-        elif db == 'unavco':
-            rpath = url[2] + '/' + year + '/' + doy + '/'
-            F.cwd(rpath)
-            # Get the name of all avaliable receivers in the direcotry
-            if not hr:
-                rxlist = getStateList(year, doy, F, db, rxn=rx, hr=hr)
-                # Download the data
-                print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-                for urlrx in rxlist:
-                    # urlrx must in in a format "nnnDDD0.YYo.xxx"
-                    download(F, urlrx, odir+urlrx,force=force)
-            else:
-                rxlist = getStateList(year, doy, F, db, rxn=rx, hr=hr)
-                # Download the data
-                print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-                for urlrx in rxlist:
-                    try:
+                else:
+                    rxlist = getStateList(year, doy, F, db, rxn=rx, hr=hr)
+                    # Download the data
+                    print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+                    for urlrx in rxlist:
                         F.cwd(rpath+urlrx[:4]+'/')
                         # urlrx must in in a format "nnnDDD0.YYo.xxx"
                         download(F, urlrx, odir+urlrx, force=force)
-                    except:
-                        pass
-        else:
-            exit()
+            else:
+                raise('Wrong database')
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
