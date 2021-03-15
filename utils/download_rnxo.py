@@ -158,7 +158,6 @@ def getStateList(year, doy, F, db, rxn=None, hr=False):
         elif db == 'cors':
             for line in d:
                 arg = line.split()[-1]
-                print (arg)
                 if (len(arg) == 4):
                     try:
                         rx = arg+str(doy)+'0.'+year[-2:]+'d.gz'
@@ -391,7 +390,7 @@ if __name__ == '__main__':
                         odir = P.dir, rx = P.rx, dllist = P.dllist, 
                         hr = P.highrate, force = P.force, fix = P.fixpath)
     elif P.db == 'conus':
-        a = ['cors', 'cddis', 'unavco']
+        a = ['cors', 'unavco']
         for db in a:
             getRinexObs(date = P.date, db = db, 
                         odir = P.dir, rx = P.rx, dllist = P.dllist, 
