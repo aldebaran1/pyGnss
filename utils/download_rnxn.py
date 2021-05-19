@@ -26,7 +26,7 @@ def unzip(f, timeout=10):
             print ('Problems with: ',tail)
     elif platform.system() == 'Windows':
         try:
-            subprocess.call('7z x "{}" -o"{}"'.format(f,head), shell=True,timeout=timeout)
+            subprocess.call('7z x "{}" -o"{}"'.format(f, head), shell=True,timeout=timeout)
             subprocess.call('del "{}"'.format(f), shell=True, timeout=timeout)
         except:
             print ('Problems with: ', tail)
@@ -135,8 +135,6 @@ def getRinexNav(date:str = None,
             except Exception as e:
                 print (e)
                 
-    unzip(odir+sfn)
-        
     return
 if __name__ == '__main__':
     from argparse import ArgumentParser
