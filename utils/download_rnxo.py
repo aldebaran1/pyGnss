@@ -7,7 +7,7 @@ Created on Fri Mar  3 13:19:38 2017
 """
 
 from six.moves.urllib.parse import urlparse
-import ftplib
+import ftplib, wget
 from typing import Union
 import numpy as np
 import requests, io
@@ -18,6 +18,36 @@ from datetime import datetime
 import subprocess
 import platform
 from dateutil import parser
+import urllib
+
+
+def download_cddis(F, rx, filename, force=False):
+    # Check is destination directory exists?
+    path, tail = os.path.split(filename)
+    
+    if not os.path.exists(path):
+        #NO? Well, create the directory. 
+        try:
+            if platform.system() == 'Linux':
+                subprocess.call('mkdir -p {}'.format(path), shell=True)
+            elif platform.system() == 'Windows':
+                subprocess.call('mkdir "{}"'.format(path), shell=True)
+        except:
+            print ('Cant make the directory')
+    # Does the file already exists in the destination directory?
+    flist = sorted(glob(path+'/*'))
+    fnlist = np.array([os.path.splitext(f)[0] for f in flist])
+    if np.isin(filename, fnlist):
+        # Do you want to override it?
+        if force:
+            print ('Downloading file: {}'.format(tail))
+            try:
+                F.retrbinary("RETR " + rx, open(filename, 'wb').write)
+            except:
+                pass
+        # Else skip the step
+        else:
+            print ('{} File already exists'.format(tail))
 
 def download(F, rx, filename,force=False):
     def _dl(F,rx):
@@ -276,50 +306,19 @@ def getRinexObs(date,
             exit()
     #CDDIS
     if db == 'cddis':
-        url = urllist[db] + str(year) + '/' + str(doy) + '/' + str(year)[2:] + 'd/'
-        r = requests.get(url)
-        for rr in r:
-            print (rr.decode())
-        
-        with open(odir, 'wb') as fd:
-            for chunk in r.iter_content(chunk_size=1000):
-                fd.write(chunk)
-        fd.close()
+        ftps = ftplib.FTP_TLS(host='gdc.cddis.eosdis.nasa.gov')
+        ftps.login(user='anonymous', passwd='sebastijan.mrak@gmail.com')
+        ftps.prot_p()
+        rpath = 'gnss/data/daily/' + year + '/' + doy + '/' + year[-2:] + 'd/'
+        ftps.cwd(rpath)
+        rxlist = getStateList(year, doy, ftps, db, rxn=rx)
+        print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+        for urlrx in rxlist:
+            download_cddis(ftps, urlrx, odir+urlrx,force=force)
 
     else:
         # Open a connection to the FTP address
         with ftplib.FTP(url[1],'anonymous','guest',timeout=45) as F:
-            YY = str(year)[2:]
-            
-            # cd to the directory with observation rinex data
-        #        if db == 'cddis':
-        #            if hr:
-        #                rpath = url[2] + '/' + year + '/' + doy + '/'+YY+'d/'
-        #                F.cwd(rpath)
-        #                
-        #                hrsdum = []
-        #                F.retrlines('LIST', hrsdum.append)
-        #                hrs = [line.split()[-1] for line in hrsdum]
-        #                for hour in hrs:
-        #                    try:
-        #                        F.cwd(rpath + hour + '/')
-        #                    except:
-        #                        pass
-        #                    rxlist = getStateList(year, doy, F, db, rxn=rx, hr=hr)
-        #                    # Download the data
-        #                    print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-        #                    for urlrx in rxlist:
-        #                        download(F, urlrx, odir+urlrx,force=force)
-        #            else:
-        #                rpath = url[2] + '/' + year + '/' + doy + '/'+YY+'o/'
-        #                F.cwd(rpath)
-        #                 Get the name of all avaliable receivers in the direcotry
-        #                rxlist = getStateList(year, doy, F, db, rxn=rx, hr=hr)
-                    # Download the data
-        #                print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-        #                for urlrx in rxlist:
-                        # urlrx must in in a format "nnnDDD0.YYo.xxx"
-        #                    download(F, urlrx, odir+urlrx,force=force)
             if db == 'cors':
                 rpath = url[2] + '/' + year + '/' + doy + '/'
                 F.cwd(rpath)
@@ -390,7 +389,13 @@ if __name__ == '__main__':
                         odir = P.dir, rx = P.rx, dllist = P.dllist, 
                         hr = P.highrate, force = P.force, fix = P.fixpath)
     elif P.db == 'conus':
-        a = ['cors', 'unavco']
+        a = ['cors', 'unavco', 'cddis']
+        for db in a:
+            getRinexObs(date = P.date, db = db, 
+                        odir = P.dir, rx = P.rx, dllist = P.dllist, 
+                        hr = P.highrate, force = P.force, fix = P.fixpath)
+    elif P.db == 'south':
+        a = ['cddis', 'unavco']
         for db in a:
             getRinexObs(date = P.date, db = db, 
                         odir = P.dir, rx = P.rx, dllist = P.dllist, 
