@@ -387,7 +387,7 @@ def getIonosphericPiercingPoints(rx_xyz, sv, obstimes, ipp_alt, navfn,
         rec_lat = rx_xyz[0]
         rec_lon = rx_xyz[1]
         rec_alt = rx_xyz[2]
-        rx_xyz = geodetic2ecef(lat = rec_lon, lon = rec_lat, alt = rec_alt)
+        rx_xyz = geodetic2ecef(lat = rx_xyz[0], lon = rx_xyz[1], alt = rec_alt)
     
     if sv[0] == 'G':
         if navfn.endswith('n'):
@@ -404,7 +404,17 @@ def getIonosphericPiercingPoints(rx_xyz, sv, obstimes, ipp_alt, navfn,
                 r_new.append(ipp_alt / fm)
             else:
                 r_new.append(np.nan)
-        lla_vector = np.array(aer2geodetic(az, el, r_new, rec_lat, rec_lon, rec_alt))
+        r_new = np.array(r_new)
+        if cs == 'wsg84':
+            idx = (el > el0)
+            
+            if el.size > 1:
+                lla_vector = np.array(aer2geodetic(az[idx], el[idx], r_new[idx], rec_lat, rec_lon, rec_alt))
+            else:
+                if el > el0:
+                    lla_vector = np.array(aer2geodetic(az, el, r_new, rec_lat, rec_lon, rec_alt))
+                else:
+                    lla_vector = np.array([np.nan, np.nan, np.nan])
         
     elif sv[0] == 'R':
         aer_vector = gloSatPosition(navfn=navfn, sv=sv, obstimes=obstimes, rx_position=[rec_lon, rec_lat, rec_alt], cs='aer')
@@ -711,6 +721,26 @@ def getIntervals(L1, L2, P1, P2, maxgap=3,maxjump=2):
             intervals.append((beginning,last))
     return idx, intervals
 
+def getIntervalsTEC(y, maxgap=3, maxjump=2):
+
+    r = np.arange(y.size)
+    idx = np.isfinite(y)
+    r = r[idx]
+    intervals=[]
+    if len(r)==0:
+        return idx, intervals
+
+    beginning=r[0]
+    last=r[0]
+    for i in r[1:]:
+        if (i-last > maxgap) or (abs(y[i] - y[last]) > maxjump):
+            intervals.append((beginning, last))
+            beginning=i
+        last=i
+        if i==r[-1]:
+            intervals.append((beginning, last))
+    return idx, intervals
+
 def solveIter(mu,e):
     """__solvIter returns an iterative solution for Ek
     Mk = Ek - e sin(Ek)
@@ -748,6 +778,34 @@ def getGpsTime(dt):
     total += dt.minute * 60
     total += dt.second
     return(total)
+
+def tecdPerLOS(stec, intervals, mask=None, eps=1, 
+               tsps=30, polynom_list=None, zero_mean=False):
+    tecd = np.nan * np.ones(stec.size)
+    if mask is None:
+        mask = np.zeros(stec.size, dtype=bool)
+    for ir, r in enumerate(intervals):
+        chunk = stec[r[0]+1 : r[1]-1]
+        idf = np.isfinite(chunk)
+        if np.sum(np.isfinite(chunk)) < (15 * (60/tsps)): 
+            err_list = np.array([])
+            continue
+        if np.sum(np.isnan(chunk)) > 0:
+            chunk = uf.cubicSplineFit(chunk, idf)
+        
+        res, err_list0, po  = uf.detrend(chunk, polynom_list=polynom_list, eps=eps, mask=mask[r[0]+1 : r[1]-1], polynomial_order=True)
+        if ir == 0 or len(err_list) == 0:
+            err_list = err_list0
+        else:
+            err_list = np.vstack((err_list, err_list0))
+        res[~idf] = np.nan
+        if zero_mean:
+            if abs(np.nansum(res)) < 5:
+                tecd[r[0]+1 : r[1]-1] = res
+        else:
+            tecd[r[0]+1 : r[1]-1] = res
+    
+    return tecd
 
 # %%
 def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
@@ -928,11 +986,6 @@ def processTEC(obs, sv, Ts = 30, frequency = 2, H=None, elevation=None,
         tec = tec * F
     
     dtec = uf.getPlainResidual(tec, Ts=Ts)
-#    x = np.arange(tecd.shape[0])
-#    mask= np.isnan(tecd)
-#    tecdp = np.copy(tecd)
-#    tecdp[mask] = np.interp(x[mask], x[~mask], tecd[~mask])
-#    tecps = uf.hpf(tecdp)
     
     if F_out:
         return tec, dtec, F
@@ -998,6 +1051,30 @@ def getVTEC(fnc, fsp3, dcb=None, jplg_file=None, el_mask=30, H=350,
         return vtec, AER
     else:
         return vtec
+
+def getVTEC2(D, F, tskip=1, el_mask=30, maxgap=1, maxjump=1):
+    
+    def _fun(p, stec, F):
+        vtec = (stec - p) * F
+        ret = np.nansum(np.nanstd(vtec, axis=1)**2)
+        return ret
+    
+    stec = np.nan * np.copy(F)
+    x0 = np.ones(D.sv.size)
+    for isv, sv in enumerate(D.sv.values):
+        idel = (F[::tskip, isv] >= getMappingFunction(el_mask, 350))
+        stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[::tskip][idel,isv], L2=D.L2.values[::tskip][idel,isv],
+                                     P1=D.C1.values[::tskip][idel,isv], P2=D.P2.values[::tskip][idel,isv],
+                                     maxgap=maxgap, maxjump=maxjump)
+        
+    sb_lsq = least_squares(_fun, x0, args=(stec, F), xtol=1e-5, gtol=1e-5, 
+                       diff_step=1e-4, loss='cauchy')
+    dcb = sb_lsq.x
+    D.close()
+    
+    vtec = (stec - dcb[isv]) * F
+    
+    return vtec
         
 def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350, 
             tskip=None, maxgap=1, maxjump=1.6,
@@ -1060,14 +1137,49 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
         return sb_lsq.x
 
 def getCNR(D, fsp3=None, el_mask=30, H=350):
-    CNO = D.S1.values
-    if fsp3 is not None:
-        assert os.path.exists(fsp3)
-        dt = np.array([np.datetime64(ttt) for ttt in D.time.values]).astype('datetime64[s]').astype(datetime)
-        for isv, sv in enumerate(D.sv.values):
-            aer = getIonosphericPiercingPoints(D.position, sv, dt, 
-                                                      ipp_alt=H, navfn=fsp3,
-                                                      cs='aer', rx_xyz_coords='xyz')
-            idel = (aer[1] >= el_mask)
-            CNO[~idel, isv] = np.nan
+    if isinstance(D, str):
+        D = gr.load(D)
+    
+    time = D.time.values
+    try:
+        CNO = D.S1.values
+
+        if fsp3 is not None:
+            assert os.path.exists(fsp3)
+            dt = np.array([np.datetime64(ttt) for ttt in time]).astype('datetime64[s]').astype(datetime)
+            for isv, sv in enumerate(D.sv.values):
+                aer = getIonosphericPiercingPoints(D.position, sv, dt, 
+                                                          ipp_alt=H, navfn=fsp3,
+                                                          cs='aer', rx_xyz_coords='xyz')
+                idel = (aer[1] >= el_mask)
+                CNO[~idel, isv] = np.nan
+    except:
+        CNO = None
     return CNO
+
+def getDTEC(fnc, fsp3, el_mask=30, maxjump=1.6, maxgap=1):
+    
+    vtec, aer = getVTEC(fnc, fsp3, return_aer=True)
+    dtec = np.nan * np.copy(vtec)
+    
+    el_mask0 = (el_mask - 20) if (el_mask - 20) > 5 else 5
+    
+    for i in range(vtec.shape[1]):
+        idel0 = aer[:, i, 1] <= el_mask0
+        vtec[idel0, i] = np.nan
+        idx, intervals = getIntervalsTEC(vtec[:, i], maxgap=maxgap, maxjump=maxjump)
+        dtec[:,i] = tecdPerLOS(vtec[:, i], intervals)
+        idel = aer[:, i, 1] < el_mask
+        dtec[idel, i] = np.nan
+    
+    return dtec
+
+def getDTEC2(vtec, maxgap=1, maxjump=1):
+    
+    dtec = np.nan * np.copy(vtec)
+    
+    for i in range(vtec.shape[1]):
+        idx, intervals = getIntervalsTEC(vtec[:, i], maxgap=maxgap, maxjump=maxjump)
+        dtec[:,i] = tecdPerLOS(vtec[:, i], intervals)
+    
+    return dtec

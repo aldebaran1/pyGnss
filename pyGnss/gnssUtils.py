@@ -444,7 +444,7 @@ def detrend(x, polynom_list=None, eps=1, mask=None, polynomial_order=False):
         res = phaseDetrend(x, order=i)
         res_masked = res[~mask]
         err = np.nansum(np.abs(res_masked)**2, dtype=np.float32)
-        err_list[i] = err
+        err_list[i-1] = err
         D0 = abs(err_list[i-1] - err)
         err_diff_list[i] = D0
         if err_diff_list[i] <= eps and err_diff_list[i-1] <= eps:
