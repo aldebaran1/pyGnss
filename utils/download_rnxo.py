@@ -117,7 +117,7 @@ def getSingleRxUrl(year, doy, F, db, rxn, hr=False):
         ds = np.array(ds)
         idrx = np.where(np.isin(ds,match))[0]
         if idrx.shape[0] > 0:
-            suffix = doy+'0.'+year[-2:]+'d.Z'
+            suffix = doy+'0.'+year[-2:]+'d.gz'
             stations = [st+suffix for st in ds[idrx]]
             stations = np.array(stations)
     # EUREF db
@@ -323,7 +323,7 @@ def getRinexObs(date,
                 rpath = url[2] + '/' + year + '/' + doy + '/'
                 F.cwd(rpath)
                 # Get the name of all avaliable receivers in the direcotry
-                rxlist = getStateList(year, doy, F, db, rxn=rx)
+                rxlist = getStateList(year, doy, F, 'cors', rxn=rx)
                 # Download the data
                 print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
                 for urlrx in rxlist:

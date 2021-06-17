@@ -322,7 +322,7 @@ def returnTEC(data, sv, navfile, yamlfile, timelim=None, el_mask=30, leap_second
               svbiasfile='/media/smrak/Eclipse2017/Eclipse/jplg2330.yaml'):
     obstimes = np.array((data.major_axis))
     obstimes = pandas.to_datetime(obstimes) - datetime.timedelta(seconds=leap_seconds)
-    stream = yaml.load(open(yamlfile, 'r'))
+    stream = yaml.load(open(yamlfile, 'r'), Loader=yaml.SafeLoader)
     rx_xyz = stream.get('APPROX POSITION XYZ')
     if (timelim is not None):
         idt = np.where( (obstimes>timelim[0]) & (obstimes<timelim[1]) ) [0]
@@ -350,12 +350,12 @@ def returnTEC(data, sv, navfile, yamlfile, timelim=None, el_mask=30, leap_second
         else:
             tec = pyGnss.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
             if svbias and not rxbias:
-                bstream = yaml.load(open(svbiasfile, 'r'))
+                bstream = yaml.load(open(svbiasfile, 'r'), Loader=yaml.SafeLoader)
                 sat_bias = float(bstream.get(sv))
                 tec = pyGnss.getVerticalTEC(tec+sat_bias, aer[1][idel], alt)
             if rxbias and svbias:
                 tec = pyGnss.getPhaseCorrTEC(L1[idel],L2[idel], C1[idel], C2[idel])
-                bstream = yaml.load(open(svbiasfile, 'r'))
+                bstream = yaml.load(open(svbiasfile, 'r'), Loader=yaml.SafeLoader)
                 sat_bias = float(bstream.get(sv))
                 rx_bias = RxbiasEstimator(RxB[0], RxB[1], t[idel], tec, sat_bias, el=aer[1][idel], IPPalt=alt)
                 print (rx_bias)

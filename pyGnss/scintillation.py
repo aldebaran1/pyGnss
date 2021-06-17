@@ -33,7 +33,7 @@ def phaseScintillationIndex(data, N):
             y[i] = np.nanstd(data[i:i+N])
     return y
     
-def AmplitudeScintillationIndex(x, N):
+def AmplitudeScintillationIndex(x, N, mu=None):
     """
     Sebastijan Mrak
     GNSS Amplitude scintillation index for the interval of the length 'N' samples
@@ -44,7 +44,11 @@ def AmplitudeScintillationIndex(x, N):
     y = np.nan * np.copy(x)
     for i in iterate:
         if np.sum(np.isfinite(x[i-n2:i+n2])) > N/4:
-            y[i] = np.sqrt(np.nanvar(x[i-n2:i+n2])) / np.nanmean(x[i-n2:i+n2])
+            if mu is None:
+                mean = np.nanmean(x[i-n2 : i+n2])
+            else:
+                mean = np.nanmean(mu[i-n2 : i+n2])
+            y[i] = np.nanstd(x[i-n2 : i+n2]) / mean
     y[idx] = np.nan
     return y
 
