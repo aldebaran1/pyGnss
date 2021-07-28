@@ -7,10 +7,8 @@ Created on Fri Mar  3 13:19:38 2017
 """
 
 from six.moves.urllib.parse import urlparse
-import ftplib, wget
-from typing import Union
+import ftplib
 import numpy as np
-import requests, io
 import yaml
 from glob import glob
 import os
@@ -18,7 +16,6 @@ from datetime import datetime
 import subprocess
 import platform
 from dateutil import parser
-import urllib
 
 
 def download_cddis(F, rx, filename, force=False):
@@ -37,15 +34,21 @@ def download_cddis(F, rx, filename, force=False):
     # Does the file already exists in the destination directory?
     flist = sorted(glob(path+'/*'))
     fnlist = np.array([os.path.splitext(f)[0] for f in flist])
-    if np.isin(filename, fnlist):
+    if not np.isin(filename, fnlist):
         # Do you want to override it?
+        print ('Downloading file: {}'.format(tail))
+        try:
+            F.retrbinary("RETR " + rx, open(filename, 'wb').write)
+        except:
+            pass
+        # Else skip the step
+    else:
         if force:
             print ('Downloading file: {}'.format(tail))
             try:
                 F.retrbinary("RETR " + rx, open(filename, 'wb').write)
             except:
                 pass
-        # Else skip the step
         else:
             print ('{} File already exists'.format(tail))
 
@@ -240,6 +243,7 @@ def getRinexObs(date,
                'cddis': 'https://cddis.nasa.gov/archive/gnss/data/daily/',
                'cddishr': 'ftp://ftp.cddis.eosdis.nasa.gov/gps/data/highrate/',
                'cors':  'ftp://geodesy.noaa.gov/cors/rinex/',
+               'chin': 'http://chain.physics.unb.ca/data/gps/data/daily/',
                'euref': 'ftp://epncb.oma.be/pub/obs/',
                'unavco': 'ftp://data-out.unavco.org/pub/rinex/obs/',
                'unavcohr': 'ftp://data-out.unavco.org/pub/highrate/1-Hz/rinex/',
@@ -315,6 +319,8 @@ def getRinexObs(date,
         print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
         for urlrx in rxlist:
             download_cddis(ftps, urlrx, odir+urlrx,force=force)
+    elif db == 'chain':
+        path = urllist[db] + year + '/' + doy + '/' + year[-2:] + 'd/'
 
     else:
         # Open a connection to the FTP address
