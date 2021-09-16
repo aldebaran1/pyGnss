@@ -6,10 +6,8 @@ Created on Wed May  9 17:24:03 2018
 @author: smrak
 """
 
-from six.moves.urllib.parse import urlparse
-import ftplib
 import subprocess
-import os
+import os, gzip, shutil
 import numpy as np
 from glob import glob
 import platform, urllib.request
@@ -46,6 +44,17 @@ def download(F, rx, filename):
                 F.retrbinary('RETR {}'.format(rx), h.write)
         except:
             pass
+        
+def unzip_rm(f, timeout=5):
+    # UNZIP
+    with gzip.open(f, 'rb') as f_in:
+        with open(f[:-3], 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+    if platform.system() == 'Linux':
+        subprocess.call('rm -r {}'.format(f), shell=True, timeout=timeout)
+    elif platform.system() =='Windows':
+        subprocess.call('del "{}"'.format(f), shell=True, timeout=timeout)
+    return
 
 def getRinexNav(date:str = None,
                 odir:str = None):
@@ -91,13 +100,16 @@ def getRinexNav(date:str = None,
     urlsp3 = f"{url}/{year}/{doy}/igs{wwwwd}.sp3.gz"
     navfile = f'{odir}brdc{doy}0.{Y}n.gz'
     sp3file = f'{odir}igs{doy}0.{Y}sp3.gz'
+    print (f'Downloading {urlnav}')
     with urllib.request.urlopen(urlnav, timeout=60) as response, open(navfile, 'wb') as out_file:
         data = response.read() # a `bytes` object
         out_file.write(data)
+    unzip_rm(navfile)
+    print (f'Downloading {urlsp3}')
     with urllib.request.urlopen(urlsp3, timeout=60) as response, open(sp3file, 'wb') as out_file:
         data = response.read() # a `bytes` object
         out_file.write(data)
-                
+    unzip_rm(sp3file)
     return
 if __name__ == '__main__':
     from argparse import ArgumentParser

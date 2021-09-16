@@ -6,7 +6,6 @@ Created on Fri Mar  3 13:19:38 2017
 @author: Sebastijan Mrak <smrak@gmail.com>
 """
 
-from six.moves.urllib.parse import urlparse
 import ftplib
 import numpy as np
 import yaml
@@ -16,7 +15,7 @@ from datetime import datetime
 import subprocess
 import platform
 from dateutil import parser
-import urllib
+import urllib.request
 from bs4 import BeautifulSoup
 
 def download_request(urlpath, filename, force=False):
