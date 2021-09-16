@@ -400,8 +400,12 @@ def getRinexObs(date,
             html = response.read().decode('ascii')
             soup = BeautifulSoup(html, 'html.parser')
             for link in soup.find_all('a'):
-                if link.get('href') is not None and len(link.get('href')[:-1]) == 4:
-                    rxlist.append(link.get('href')[:4])
+                if hr:
+                    if link.get('href') is not None and len(link.get('href')[:-1]) == 4:
+                        rxlist.append(link.get('href')[:4])
+                else:
+                    if link.get('href') is not None and len(link.get('href')) == 14:
+                        rxlist.append(link.get('href')[:4])
                     
         if isinstance(rx, str):
             irx = np.isin(np.asarray(rxlist), rx)
