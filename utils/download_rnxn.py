@@ -12,7 +12,7 @@ import subprocess
 import os
 import numpy as np
 from glob import glob
-import platform
+import platform, urllib.request
 from datetime import datetime
 from dateutil import parser
 
@@ -48,15 +48,15 @@ def download(F, rx, filename):
             pass
 
 def getRinexNav(date:str = None,
-                odir:str = None,
-                const:str = 'gps'):
+                odir:str = None):
     """
     year,doy: integer
     db: the name of the database
     odif: final directory to save the rinex files
     """
     # Parse cors url address
-    url =  urlparse('ftp://geodesy.noaa.gov/cors/rinex/')
+#    url =  urlparse('ftp://geodesy.noaa.gov/cors/rinex/')
+    url = 'https://geodesy.noaa.gov/corsdata/rinex/'
     # Parse date
     try:
         if len(date.split('-')) == 3:
@@ -69,6 +69,7 @@ def getRinexNav(date:str = None,
     except Exception as e:
         raise (e)
     year = str(dt.year)
+    Y = year[-2:]
     doy = dt.timetuple().tm_yday
     # Correct spelling to unify the length (char) of the doy in year (DOY)
     if len(str(doy)) == 2:
@@ -80,60 +81,22 @@ def getRinexNav(date:str = None,
     else: 
         print ('Error - Soomething is wrong with your day of year (DOY)')
     
-    # Constellation navigation file variable
-    sct = {'gps' : 'n',
-           'glonass' : 'g',
-           'gallileo' : 'e',
-           'sp3': 'sp3'}
-    # Open a connection to the FTP address
-    with ftplib.FTP(url[1],'anonymous','guest',timeout=15) as F:
-        rpath = url[2] + '/' + year + '/' + doy + '/'
-        F.cwd(rpath)
-        if const == 'sp3':
-            ts = (dt - datetime(1980, 1, 6)).total_seconds()
-            gpsweek = int(ts / 60 /60 / 24 / 7)
-            weekday = (dt.weekday() + 1 ) % 7
-            wwwwd = str(gpsweek) + str(weekday)
-            urlrx = 'igs{}.sp3.gz'.format(wwwwd)
-            print (urlrx)
-            sfn = 'igs{}0.{}sp3.gz'.format(doy, year[-2:])
-            try:
-                # urlrx must in in a format "nnnDDD0.YYo.xxx"
-                download(F, urlrx, odir+sfn)
-            except Exception as e:
-                print (e)
-        elif const =='gps':
-            urlrx = 'brdc' + doy + '0.' + year[-2:]+sct[const]+'.gz'
-            sfn = urlrx
-            try:
-                # urlrx must in in a format "nnnDDD0.YYo.xxx"
-                download(F, urlrx, odir+urlrx)
-                unzip(odir+sfn)
-            except Exception as e:
-                print (e)
-            # SP3
-            ts = (dt - datetime(1980, 1, 6)).total_seconds()
-            gpsweek = int(ts / 60 /60 / 24 / 7)
-            weekday = (dt.weekday() + 1 ) % 7
-            wwwwd = str(gpsweek) + str(weekday)
-            urlrx = 'igs{}.sp3.gz'.format(wwwwd)
-            print (urlrx)
-            sfn = 'igs{}0.{}sp3.gz'.format(doy, year[-2:])
-            try:
-                # urlrx must in in a format "nnnDDD0.YYo.xxx"
-                download(F, urlrx, odir+sfn)
-                unzip(odir+sfn)
-            except Exception as e:
-                print (e)
-        else:
-            urlrx = 'brdc' + doy + '0.' + year[-2:]+sct[const]+'.gz'
-            sfn = urlrx
-            try:
-                # urlrx must in in a format "nnnDDD0.YYo.xxx"
-                download(F, urlrx, odir+urlrx)
-                unzip(odir+sfn)
-            except Exception as e:
-                print (e)
+    ts = (dt - datetime(1980, 1, 6)).total_seconds()
+    gpsweek = int(ts / 60 /60 / 24 / 7)
+    weekday = (dt.weekday() + 1 ) % 7
+    wwwwd = str(gpsweek) + str(weekday)
+
+    # Use HTTPS acces
+    urlnav = f"{url}/{year}/{doy}/brdc{doy}0.{Y}n.gz"
+    urlsp3 = f"{url}/{year}/{doy}/igs{wwwwd}.sp3.gz"
+    navfile = f'{odir}brdc{doy}0.{Y}n.gz'
+    sp3file = f'{odir}igs{doy}0.{Y}sp3.gz'
+    with urllib.request.urlopen(urlnav, timeout=60) as response, open(navfile, 'wb') as out_file:
+        data = response.read() # a `bytes` object
+        out_file.write(data)
+    with urllib.request.urlopen(urlsp3, timeout=60) as response, open(sp3file, 'wb') as out_file:
+        data = response.read() # a `bytes` object
+        out_file.write(data)
                 
     return
 if __name__ == '__main__':
@@ -141,8 +104,8 @@ if __name__ == '__main__':
     p = ArgumentParser()
     p.add_argument('date', type=str, help='Date format YYYY-mm-dd')
     p.add_argument('dir', type=str, help='destination directory')
-    p.add_argument('--type', type=str, help='Navtype type: gps, glonass, gallileo, sp3', default='gps')
+#    p.add_argument('--type', type=str, help='Navtype type: gps, glonass, gallileo, sp3', default='gps')
     
     P = p.parse_args()
     # Get file
-    getRinexNav(date = P.date, odir = P.dir, const = P.type)
+    getRinexNav(date = P.date, odir = P.dir)
