@@ -16,6 +16,47 @@ from datetime import datetime
 import subprocess
 import platform
 from dateutil import parser
+import urllib
+from bs4 import BeautifulSoup
+
+def download_request(urlpath, filename, force=False):
+    # Check is destination directory exists?
+    path, tail = os.path.split(filename)
+
+    if not os.path.exists(path):
+        #NO? Well, create the directory. 
+        try:
+            if platform.system() == 'Linux':
+                subprocess.call('mkdir -p {}'.format(path), shell=True)
+            elif platform.system() == 'Windows':
+                subprocess.call('mkdir "{}"'.format(path), shell=True)
+        except:
+            print ('Cant make the directory')
+    # Does the file already exists in the destination directory?
+    flist = sorted(glob(path+'/*'))
+    fnlist = np.array([os.path.splitext(f)[0] for f in flist])
+    
+    if not np.isin(filename, fnlist):
+        # Do you want to override it?
+        print ('Downloading file: {}'.format(tail))
+        try:
+            with urllib.request.urlopen(urlpath, timeout=60) as response, open(filename, 'wb') as out_file:
+                data = response.read() # a `bytes` object
+                out_file.write(data)
+        except:
+            pass
+        # Else skip the step
+    else:
+        if force:
+            print ('Downloading file: {}'.format(tail))
+            try:
+                with urllib.request.urlopen(urlpath, timeout=60) as response, open(filename, 'wb') as out_file:
+                    data = response.read() # a `bytes` object
+                    out_file.write(data)
+            except:
+                pass
+        else:
+            print ('{} File already exists'.format(tail))
 
 
 def download_cddis(F, rx, filename, force=False):
@@ -242,18 +283,15 @@ def getRinexObs(date,
     urllist = {#'cddis': 'ftp://cddis.gsfc.nasa.gov/gnss/data/daily/',
                'cddis': 'https://cddis.nasa.gov/archive/gnss/data/daily/',
                'cddishr': 'ftp://ftp.cddis.eosdis.nasa.gov/gps/data/highrate/',
-               'cors':  'ftp://geodesy.noaa.gov/cors/rinex/',
-               'chin': 'http://chain.physics.unb.ca/data/gps/data/daily/',
+               #'cors':  'ftp://geodesy.noaa.gov/cors/rinex/',
+               'cors': 'https://geodesy.noaa.gov/corsdata/rinex/',
+               'chain': 'http://chain.physics.unb.ca/data/gps/data/daily/',
                'euref': 'ftp://epncb.oma.be/pub/obs/',
-               'unavco': 'ftp://data-out.unavco.org/pub/rinex/obs/',
-               'unavcohr': 'ftp://data-out.unavco.org/pub/highrate/1-Hz/rinex/',
+               #'unavco': 'ftp://data-out.unavco.org/pub/rinex/obs/',
+               'unavco': 'https://data.unavco.org/archive/gnss/rinex/obs/',
+               #'unavcohr': 'ftp://data-out.unavco.org/pub/highrate/1-Hz/rinex/',
+               'unavcohr': 'https://data.unavco.org/archive/gnss/highrate/1-Hz/rinex/',
                'ring': 'ftp://bancadati2.gm.ingv.it:2121/OUTGOING/RINEX30/RING/'}
-    if not hr:
-        url =  urlparse(urllist[db])
-    else: 
-        assert db == 'unavco' or db == 'cddis', 'High rate data available only for unavco and cddis databases'
-        url =  urlparse(urllist[db+'hr'])
-    # Parse date
     try:
         if len(date.split('-')) == 3:
             dt = parser.parse(date)
@@ -265,6 +303,7 @@ def getRinexObs(date,
     except Exception as e:
         raise (e)
     year = str(dt.year)
+    Y = year[-2:]
     doy = dt.timetuple().tm_yday
     # Correct spelling to unify the length (char) of the doy in year (DOY)
     if len(str(doy)) == 2:
@@ -313,60 +352,138 @@ def getRinexObs(date,
         ftps = ftplib.FTP_TLS(host='gdc.cddis.eosdis.nasa.gov')
         ftps.login(user='anonymous', passwd='sebastijan.mrak@gmail.com')
         ftps.prot_p()
-        rpath = 'gnss/data/daily/' + year + '/' + doy + '/' + year[-2:] + 'd/'
+        rpath = 'gnss/data/daily/' + year + '/' + doy + '/' + Y + 'd/'
         ftps.cwd(rpath)
         rxlist = getStateList(year, doy, ftps, db, rxn=rx)
         print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
         for urlrx in rxlist:
             download_cddis(ftps, urlrx, odir+urlrx,force=force)
+            
     elif db == 'chain':
-        path = urllist[db] + year + '/' + doy + '/' + year[-2:] + 'd/'
-
+        url = f'{urllist[db]}/{year}/{doy}/{Y}d/'
+        
+        rxlist = []
+        with urllib.request.urlopen(url) as response:
+            html = response.read().decode('ascii')
+            soup = BeautifulSoup(html, 'html.parser')
+            for link in soup.find_all('a'):
+                if link.get('href') is not None and len(link.get('href')) == 14:
+                    rxlist.append(link.get('href')[:4])
+                    
+        if isinstance(rx, str):
+            irx = np.isin(np.asarray(rxlist), rx)
+            rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
+        
+        if rxlist is not None:
+            print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+            for rx in rxlist:
+                path = f"{url}/{rx}{doy}0.{Y}d.Z"
+                print (path)
+                ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
+                download_request(urlpath=path, filename=ofn, force=force)
+                break
+        else:
+            print ('{} wasnt found'.format(rx))
+    
+    elif db == 'unavco':
+        if hr:
+            dbhr = db+'hr'
+            url = f'{urllist[dbhr]}/{year}/{doy}/'
+        else:
+            url = f'{urllist[db]}/{year}/{doy}/'
+        rxlist = []
+        with urllib.request.urlopen(url) as response:
+            html = response.read().decode('ascii')
+            soup = BeautifulSoup(html, 'html.parser')
+            for link in soup.find_all('a'):
+                if link.get('href') is not None and len(link.get('href')[:-1]) == 4:
+                    rxlist.append(link.get('href')[:4])
+                    
+        if isinstance(rx, str):
+            irx = np.isin(np.asarray(rxlist), rx)
+            rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
+        
+        if rxlist is not None:
+            print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+            for rx in rxlist:
+                path = f"{url}/{rx}/{rx}{doy}0.{Y}d.Z"
+                print (path)
+                ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
+                download_request(urlpath=path, filename=ofn, force=force)
+                break
+        else:
+            print ('{} wasnt found'.format(rx))
+    
+    elif db == 'cors':
+        url = f'{urllist[db]}/{year}/{doy}/'
+        
+        rxlist = []
+        with urllib.request.urlopen(url) as response:
+            html = response.read().decode('ascii')
+            soup = BeautifulSoup(html, 'html.parser')
+            for link in soup.find_all('a'):
+                if len(link.get('href')[:-1]) == 4:
+                    rxlist.append(link.get('href')[:-1])
+        if isinstance(rx, str):
+            irx = np.isin(np.asarray(rxlist), rx)
+            rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
+        
+        if rxlist is not None:
+            print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+            for rx in rxlist:
+                path = f"{url}/{rx}/{rx}{doy}0.{Y}d.gz"
+                ofn = f'{odir}{rx}{doy}0.{Y}d.gz'
+                download_request(urlpath=path, filename=ofn, force=force)
+                break
+        else:
+            print ('{} wasnt found'.format(rx))
+    
     else:
-        # Open a connection to the FTP address
-        with ftplib.FTP(url[1],'anonymous','guest',timeout=45) as F:
-            if db == 'cors':
-                rpath = url[2] + '/' + year + '/' + doy + '/'
-                F.cwd(rpath)
-                # Get the name of all avaliable receivers in the direcotry
-                rxlist = getStateList(year, doy, F, 'cors', rxn=rx)
-                # Download the data
-                print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-                for urlrx in rxlist:
-                    print (urlrx)
-                    F.cwd(rpath+urlrx[:4]+'/')
-                    download(F, urlrx, odir+urlrx,force=force)
-            elif db == 'euref':
-                rpath = url[2] + '/' + year + '/' + doy + '/'
-                F.cwd(rpath)
-                # Get the name of all avaliable receivers in the direcotry
-                rxlist = getStateList(year, doy, F, db, rxn=rx)
-                # Download the data
-                print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-                for urlrx in rxlist:
-                    # urlrx must in in a format "nnnDDD0.YYo.xxx"
-                    download(F, urlrx, odir+urlrx,force=force)
-            elif db == 'unavco':
-                rpath = url[2] + '/' + year + '/' + doy + '/'
-                F.cwd(rpath)
-                # Get the name of all avaliable receivers in the direcotry
-                if not hr:
-                    rxlist = getStateList(year, doy, F, db, rxn=rx, hr=hr)
-                    # Download the data
-                    print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-                    for urlrx in rxlist:
-                        # urlrx must in in a format "nnnDDD0.YYo.xxx"
-                        download(F, urlrx, odir+urlrx,force=force)
-                else:
-                    rxlist = getStateList(year, doy, F, db, rxn=rx, hr=hr)
-                    # Download the data
-                    print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-                    for urlrx in rxlist:
-                        F.cwd(rpath+urlrx[:4]+'/')
-                        # urlrx must in in a format "nnnDDD0.YYo.xxx"
-                        download(F, urlrx, odir+urlrx, force=force)
-            else:
-                raise('Wrong database')
+        raise('Wrong database')
+#    else:
+#        # Open a connection to the FTP address
+#        with ftplib.FTP(url[1],'anonymous','guest',timeout=45) as F:
+#            if db == 'cors':
+#                rpath = url[2] + '/' + year + '/' + doy + '/'
+#                F.cwd(rpath)
+#                # Get the name of all avaliable receivers in the direcotry
+#                rxlist = getStateList(year, doy, F, 'cors', rxn=rx)
+#                # Download the data
+#                print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+#                for urlrx in rxlist:
+#                    print (urlrx)
+#                    F.cwd(rpath+urlrx[:4]+'/')
+#                    download(F, urlrx, odir+urlrx,force=force)
+#            elif db == 'euref':
+#                rpath = url[2] + '/' + year + '/' + doy + '/'
+#                F.cwd(rpath)
+#                # Get the name of all avaliable receivers in the direcotry
+#                rxlist = getStateList(year, doy, F, db, rxn=rx)
+#                # Download the data
+#                print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+#                for urlrx in rxlist:
+#                    # urlrx must in in a format "nnnDDD0.YYo.xxx"
+#                    download(F, urlrx, odir+urlrx,force=force)
+#            elif db == 'unavco':
+#                rpath = url[2] + '/' + year + '/' + doy + '/'
+#                F.cwd(rpath)
+#                # Get the name of all avaliable receivers in the direcotry
+#                if not hr:
+#                    rxlist = getStateList(year, doy, F, db, rxn=rx, hr=hr)
+#                    # Download the data
+#                    print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+#                    for urlrx in rxlist:
+#                        # urlrx must in in a format "nnnDDD0.YYo.xxx"
+#                        download(F, urlrx, odir+urlrx,force=force)
+#                else:
+#                    rxlist = getStateList(year, doy, F, db, rxn=rx, hr=hr)
+#                    # Download the data
+#                    print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+#                    for urlrx in rxlist:
+#                        F.cwd(rpath+urlrx[:4]+'/')
+#                        # urlrx must in in a format "nnnDDD0.YYo.xxx"
+#                        download(F, urlrx, odir+urlrx, force=force)
+            
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
