@@ -386,7 +386,6 @@ def getRinexObs(date,
                 print (path)
                 ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
                 download_request(urlpath=path, filename=ofn, force=force)
-                break
         else:
             print ('{} wasnt found'.format(rx))
     
@@ -415,7 +414,6 @@ def getRinexObs(date,
                 print (path)
                 ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
                 download_request(urlpath=path, filename=ofn, force=force)
-                break
         else:
             print ('{} wasnt found'.format(rx))
     
@@ -439,7 +437,6 @@ def getRinexObs(date,
                 path = f"{url}/{rx}/{rx}{doy}0.{Y}d.gz"
                 ofn = f'{odir}{rx}{doy}0.{Y}d.gz'
                 download_request(urlpath=path, filename=ofn, force=force)
-                break
         else:
             print ('{} wasnt found'.format(rx))
     
