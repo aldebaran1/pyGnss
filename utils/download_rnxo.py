@@ -330,11 +330,17 @@ def getRinexObs(date,
             if not os.path.exists(odir):
                 if not os.path.exists(odir):
                     try:
-                        subprocess.call('mkdir "{}"'.format(odir), shell=True)
+                        if platform.system() == 'Windows':
+                            subprocess.call('mkdir "{}"'.format(odir), shell=True)
+                        else:
+                            subprocess.call('mkdir -p {}'.format(odir), shell=True)
                     except:
                         print ('Cant make the directory')
             try:
-                subprocess.call('mkdir "{}"'.format(odir), shell=True)
+                if platform.system() == 'Windows':
+                    subprocess.call('mkdir "{}"'.format(odir), shell=True)
+                else:
+                    subprocess.call('mkdir -p {}'.format(odir), shell=True)
             except:
                 print ('Cant make the directory')
     # Reasign dllist from yaml into rx [list]
