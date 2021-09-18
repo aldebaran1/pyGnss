@@ -6,6 +6,7 @@ Created on Fri Mar  3 13:19:38 2017
 @author: Sebastijan Mrak <smrak@gmail.com>
 """
 
+from six.moves.urllib.parse import urlparse
 import ftplib
 import numpy as np
 import yaml
@@ -15,7 +16,7 @@ from datetime import datetime
 import subprocess
 import platform
 from dateutil import parser
-import urllib.request
+import urllib
 from bs4 import BeautifulSoup
 
 def download_request(urlpath, filename, force=False):
@@ -330,17 +331,11 @@ def getRinexObs(date,
             if not os.path.exists(odir):
                 if not os.path.exists(odir):
                     try:
-                        if platform.system() == 'Windows':
-                            subprocess.call('mkdir "{}"'.format(odir), shell=True)
-                        else:
-                            subprocess.call('mkdir -p {}'.format(odir), shell=True)
+                        subprocess.call('mkdir "{}"'.format(odir), shell=True)
                     except:
                         print ('Cant make the directory')
             try:
-                if platform.system() == 'Windows':
-                    subprocess.call('mkdir "{}"'.format(odir), shell=True)
-                else:
-                    subprocess.call('mkdir -p {}'.format(odir), shell=True)
+                subprocess.call('mkdir "{}"'.format(odir), shell=True)
             except:
                 print ('Cant make the directory')
     # Reasign dllist from yaml into rx [list]
@@ -393,17 +388,20 @@ def getRinexObs(date,
         if hr:
             dbhr = db+'hr'
             url = f'{urllist[dbhr]}/{year}/{doy}/'
-        else:
-            url = f'{urllist[db]}/{year}/{doy}/'
-        rxlist = []
-        with urllib.request.urlopen(url) as response:
-            html = response.read().decode('ascii')
-            soup = BeautifulSoup(html, 'html.parser')
-            for link in soup.find_all('a'):
-                if hr:
+            rxlist = []
+            with urllib.request.urlopen(url) as response:
+                html = response.read().decode('ascii')
+                soup = BeautifulSoup(html, 'html.parser')
+                for link in soup.find_all('a'):
                     if link.get('href') is not None and len(link.get('href')[:-1]) == 4:
                         rxlist.append(link.get('href')[:4])
-                else:
+        else:
+            url = f'{urllist[db]}/{year}/{doy}/'
+            rxlist = []
+            with urllib.request.urlopen(url) as response:
+                html = response.read().decode('ascii')
+                soup = BeautifulSoup(html, 'html.parser')
+                for link in soup.find_all('a'):
                     if link.get('href') is not None and len(link.get('href')) == 14:
                         rxlist.append(link.get('href')[:4])
                     
@@ -414,9 +412,12 @@ def getRinexObs(date,
         if rxlist is not None:
             print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
             for rx in rxlist:
-                path = f"{url}/{rx}/{rx}{doy}0.{Y}d.Z"
-                print (path)
-                ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
+                if hr:
+                    path = f"{url}/{rx}/{rx}{doy}0.{Y}d.Z"
+                    ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
+                else:
+                    path = f"{url}/{rx}{doy}0.{Y}d.Z"
+                    ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
                 download_request(urlpath=path, filename=ofn, force=force)
         else:
             print ('{} wasnt found'.format(rx))
