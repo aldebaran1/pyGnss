@@ -16,7 +16,7 @@ from datetime import datetime
 import subprocess
 import platform
 from dateutil import parser
-import urllib
+import urllib.request
 from bs4 import BeautifulSoup
 
 def download_request(urlpath, filename, force=False):
