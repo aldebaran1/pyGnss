@@ -11,6 +11,7 @@ import datetime
 import matplotlib.pyplot as plt
 import pytz
 from scipy.interpolate import CubicSpline
+import pandas as pd
 
 #constnats for GPS
 f1 = 1575420000
@@ -234,6 +235,10 @@ def CSnorm(L1, L, cycle_slip_idx, frequency = 2, verbose = False, plot = True):
     
     return Y
 
+def detrend_running_mean(y, N=40):
+     # T in minutes
+    return y - np.asarray(pd.Series(y).rolling(N).mean().shift(-int(N/2)))
+
 def phaseDetrend(y, order,polynom=False):
     """
     Sebastijan Mrak
@@ -444,10 +449,11 @@ def detrend(x, polynom_list=None, eps=1, mask=None, polynomial_order=False):
         res = phaseDetrend(x, order=i)
         res_masked = res[~mask]
         err = np.nansum(np.abs(res_masked)**2, dtype=np.float32)
+        
         err_list[i-1] = err
-        D0 = abs(err_list[i-1] - err)
-        err_diff_list[i] = D0
-        if err_diff_list[i] <= eps and err_diff_list[i-1] <= eps:
+        if i > 1:
+            err_diff_list[i-1] = abs(err_list[i-2] - err)
+        if err_diff_list[i-1] <= eps and err_diff_list[i-2] <= eps:
             break
     if polynomial_order:
         return res, err_list, i

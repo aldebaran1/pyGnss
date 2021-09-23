@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from pandas import Timestamp
 import georinex as gr
 from pyGnss import gnssUtils as uf
+from pyGnss import scintillation
 from glob import glob
 from scipy.optimize import least_squares
 
@@ -364,6 +365,16 @@ def gpsSatPosition(fnav, dt, sv=None, rx_position=None, coords='xyz'):
         return np.array([A,E,R])
 
 #%% Sat positioning 
+    
+def aer2ipp(aer, rxp, H=350):
+    H*=1e3
+    aer_new = np.copy(aer)
+    fm = np.sin(np.radians(aer[:,:,1]))
+    aer_new[:,:,2] = (H / fm)
+    rxp
+    ipp = np.array(aer2geodetic(aer_new[:,:,0], aer_new[:,:,1], aer_new[:,:,2], 
+                                rxp[0], rxp[1], rxp[2]))
+    return ipp
 
 def getIonosphericPiercingPoints(rx_xyz, sv, obstimes, ipp_alt, navfn,
                                  cs='wsg84', rx_xyz_coords='xyz', el0=0):
@@ -1113,6 +1124,11 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
         stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[::tskip][idel,isv], L2=D.L2.values[::tskip][idel,isv],
                                      P1=D.C1.values[::tskip][idel,isv], P2=D.P2.values[::tskip][idel,isv],
                                      maxgap=maxgap, maxjump=maxjump)
+#        penalty = np.nan * np.copy(stec)
+#        for i in range(stec.shape[1]):
+#            penalty[:,i] = scintillation.sigmaTEC(stec[:,i], 30)
+#        penalty = np.nansum(penalty**2, axis=1)
+#        idp = (penalty < 1)
         if jplg_file is not None:
             sb[isv] = getSatBias(jplg_file, sv)
         if return_mapping_function:
@@ -1123,8 +1139,9 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
             AER[idel0, isv, 2] = aer0[2][idel0]
     # LEAST sQUARES FIT
     x0 = np.empty(D.sv.size) if jplg_file is None else sb
-    sb_lsq = least_squares(_fun, x0, args=(stec, F), xtol=1e-5, gtol=1e-5, 
-                       diff_step=1e-4, loss='cauchy')
+#    sb_lsq = least_squares(_fun, x0, args=(stec, penalty, F), xtol=1e-5, gtol=1e-5, 
+#                       diff_step=1e-4, loss='cauchy')
+    sb_lsq = least_squares(_fun, x0, args=(stec, F), loss='soft_l1')
     D.close()
     
     if return_mapping_function and (not return_aer):
@@ -1157,7 +1174,7 @@ def getCNR(D, fsp3=None, el_mask=30, H=350):
         CNO = None
     return CNO
 
-def getDTEC(fnc, fsp3, el_mask=30, maxjump=1.6, maxgap=1):
+def getDTEC(fnc, fsp3, el_mask=30, maxjump=1.6, maxgap=1, eps=1, tsps=30):
     
     vtec, aer = getVTEC(fnc, fsp3, return_aer=True)
     dtec = np.nan * np.copy(vtec)
@@ -1168,18 +1185,34 @@ def getDTEC(fnc, fsp3, el_mask=30, maxjump=1.6, maxgap=1):
         idel0 = aer[:, i, 1] <= el_mask0
         vtec[idel0, i] = np.nan
         idx, intervals = getIntervalsTEC(vtec[:, i], maxgap=maxgap, maxjump=maxjump)
-        dtec[:,i] = tecdPerLOS(vtec[:, i], intervals)
+        dtec[:,i] = tecdPerLOS(vtec[:, i], intervals, eps=eps, tsps=tsps)
         idel = aer[:, i, 1] < el_mask
         dtec[idel, i] = np.nan
     
     return dtec
 
-def getDTEC2(vtec, maxgap=1, maxjump=1):
+def getDTECra(fnc, fsp3, el_mask=30, maxjump=1.6, maxgap=1, N=40):
+    
+    vtec, aer = getVTEC(fnc, fsp3, return_aer=True)
+    dtec = np.nan * np.copy(vtec)
+    
+    el_mask0 = (el_mask - 20) if (el_mask - 20) > 5 else 5
+    
+    for i in range(vtec.shape[1]):
+        idel0 = aer[:, i, 1] <= el_mask0
+        vtec[idel0, i] = np.nan
+        dtec[:,i] = uf.detrend_running_mean(vtec[:,i], N=N)
+        idel = aer[:, i, 1] < el_mask
+        dtec[idel, i] = np.nan
+    
+    return dtec
+
+def getDTEC2(vtec, maxgap=1, maxjump=1, eps=1, tsps=30):
     
     dtec = np.nan * np.copy(vtec)
     
     for i in range(vtec.shape[1]):
         idx, intervals = getIntervalsTEC(vtec[:, i], maxgap=maxgap, maxjump=maxjump)
-        dtec[:,i] = tecdPerLOS(vtec[:, i], intervals)
+        dtec[:,i] = tecdPerLOS(vtec[:, i], intervals, eps=eps, tsps=tsps)
     
     return dtec
