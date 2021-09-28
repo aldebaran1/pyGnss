@@ -38,9 +38,20 @@ def unzipfolder(folder, timeout=5, delete=True):
         flist = sorted(glob.glob(filestr))
         c = 1
         for file in flist:
-            print('Unizipping: ' +str(c) + '/'+str(len(flist)+1))
+            print('Unizipping: {}/{}: {}'.format(c,len(flist)+1, file))
             unzip(file, timeout, delete=delete)
             c+=1
+    if delete:
+        if platform.system() == 'Windows':
+            subprocess.call('del "{}"'.format(os.path.join(folder, '*.*g')), shell=True, timeout=timeout)
+            subprocess.call('del "{}"'.format(os.path.join(folder, '*.*m')), shell=True, timeout=timeout)
+            subprocess.call('del "{}"'.format(os.path.join(folder, '*.*n')), shell=True, timeout=timeout)
+            subprocess.call('del "{}"'.format(os.path.join(folder, '*.*l')), shell=True, timeout=timeout)
+        else:
+            subprocess.call('rm -rf "{}"'.format(os.path.join(folder, '*.*g')), shell=True, timeout=timeout)
+            subprocess.call('rm -rf "{}"'.format(os.path.join(folder, '*.*m')), shell=True, timeout=timeout)
+            subprocess.call('rm -rf "{}"'.format(os.path.join(folder, '*.*n')), shell=True, timeout=timeout)
+            subprocess.call('rm -rf "{}"'.format(os.path.join(folder, '*.*l')), shell=True, timeout=timeout)
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
