@@ -574,7 +574,7 @@ if __name__ == '__main__':
     
     P = p.parse_args()
     if P.db == 'all':
-        a = ['cors', 'cddis', 'euref', 'unavco']
+        a = ['cors', 'cddis', 'euref', 'unavco', 'brasil', 'chain', 'chile']
         for db in a:
             getRinexObs(date = P.date, db = db, 
                         odir = P.dir, rx = P.rx, dllist = P.dllist, 

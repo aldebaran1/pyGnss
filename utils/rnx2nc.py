@@ -18,7 +18,7 @@ def _convert(file, odir, i, tlim=None, fast=True,
              use = 'G', override=False):
     try:
         gr.load(file, out = odir, useindicators = i,
-                fast = fast, tlim=tlim, use = use, override = override)
+                fast = fast, tlim=tlim, use = use, overwrite = override)
     except Exception as e:
         print (e)
     sleep(0.1)
@@ -73,7 +73,7 @@ def convertObs2HDF(folder=None, sufix=None, odir=None, override=False,
     else:
         if os.path.isdir(folder):
             if sufix is None:
-                wlist = ['*.**o', '*.**O', '*.**d']
+                wlist = ['*.**o', '*.**O', '*.**d', '*.gz', '*.Z']
             else:
                 wlstr = sufix
             for wlstr in wlist:
