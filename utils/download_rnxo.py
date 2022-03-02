@@ -479,7 +479,16 @@ def getRinexObs(date,
                 download_request(urlpath=path, filename=ofn, force=force)
         else:
             print ('{} wasnt found'.format(rx))
-    
+#    elif db == 'euref':
+#                rpath = url[2] + '/' + year + '/' + doy + '/'
+#                F.cwd(rpath)
+#                # Get the name of all avaliable receivers in the direcotry
+#                rxlist = getStateList(year, doy, F, db, rxn=rx)
+#                # Download the data
+#                print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+#                for urlrx in rxlist:
+#                    # urlrx must in in a format "nnnDDD0.YYo.xxx"
+#                    download(F, urlrx, odir+urlrx,force=force)
     elif db == 'brasil':
         url = f'{urllist[db]}/{year}/{doy}/'
         
@@ -574,7 +583,7 @@ if __name__ == '__main__':
     
     P = p.parse_args()
     if P.db == 'all':
-        a = ['cors', 'cddis', 'euref', 'unavco', 'brasil', 'chain', 'chile']
+        a = ['cors', 'cddis', 'unavco', 'brasil', 'chain', 'chile']
         for db in a:
             getRinexObs(date = P.date, db = db, 
                         odir = P.dir, rx = P.rx, dllist = P.dllist, 
