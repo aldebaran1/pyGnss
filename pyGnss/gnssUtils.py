@@ -58,10 +58,11 @@ def bpf(y, lowcut, highcut, fs=1, order=5, plot=False):
     gd = -np.diff(np.unwrap(np.angle(h)))/np.diff(w)
     idx = abs(w-high).argmin()
     y_filt = signal.lfilter(b, a, y)
+    y_filt = signal.filtfilt(b, a, y)
     if plot:
         plt.figure()
-        plt.semilogx(w, 20*np.log10(np.abs(h)))
-        plt.plot(w[idx], 20*np.log10(np.abs(h[idx])), 'xr')
+        plt.semilogx(w*nyq, 20*np.log10(np.abs(h)))
+        plt.plot(w[idx]*nyq, 20*np.log10(np.abs(h[idx])), 'xr')
         plt.ylim([-60,5])
         plt.title('Magnitude-normalized Butterworth filter frequency response')
         plt.xlabel('Frequency [Hz]')
@@ -70,9 +71,9 @@ def bpf(y, lowcut, highcut, fs=1, order=5, plot=False):
         ################################################
     
         plt.figure()
-        plt.semilogx(w[1:], gd)
-        plt.plot(w[idx], gd[idx], 'xr')
-        plt.title('LPF group delay')
+        plt.semilogx(w[1:]*nyq, gd)
+        plt.plot(w[idx]*nyq, gd[idx], 'xr')
+        plt.title('BPF group delay')
         plt.xlabel('Frequency [Hz]')
         plt.ylabel('Group delay [samples]')
         plt.margins(0, 0.1)
@@ -114,6 +115,7 @@ def hpf(y, fc=0.1, order=5, fs=1,plot=False, group_delay=False, verbatim=False):
 def lpf(y, fc=0.1, order=5, fs=1, plot=False, group_delay=False, verbatim=False):
     b, a = butter_lpf(fc, fs, order)
     y_filt = signal.lfilter(b, a, y)
+    y_filt = signal.filtfilt(b, a, y, padlen=30)
     w, h = signal.freqz(b, a, worN=1000)
     gd = -np.diff(np.unwrap(np.angle(h)))/np.diff(w)
     if verbatim: print ('Group delay of the filter is '+ str(gd[1])+' samples.')
