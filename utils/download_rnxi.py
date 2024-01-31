@@ -19,7 +19,7 @@ from dateutil import parser
 def unzip(f, timeout=10):
     head, tail = os.path.split(f)
     print ('Unzipping: ', tail)
-    if platform.system() == 'Linux':
+    if platform.system() in ('Linux', 'Darwin'):
         try:
             subprocess.call('gzip -d ' + f, shell=True, timeout=timeout)
         except:
@@ -35,17 +35,23 @@ def unzip(f, timeout=10):
 def download(F, rx, filename):
     # Does the file already exists in the destination directory?
     path, tail = os.path.split(filename)
-    flist = sorted(glob(path+'/*'))
-    fnlist = np.array([os.path.splitext(f)[0] for f in flist])
-    if np.isin(os.path.splitext(filename)[0], fnlist):
-        print ("{} already exists".format(tail))
-    else:
-        print ('Downloading to: ', filename)
+    
+    if not os.path.exists(path):
+        #NO? Well, create the directory. 
         try:
-            with open(filename, 'wb') as h:
-                F.retrbinary('RETR {}'.format(rx), h.write)
+            if platform.system() == 'Linux':
+                subprocess.call('mkdir -p {}'.format(path), shell=True)
+            elif platform.system() == 'Windows':
+                subprocess.call('mkdir "{}"'.format(path), shell=True)
         except:
-            pass
+            print ('Cant make the directory')
+
+    print ('Downloading file: {}'.format(tail))
+    try:
+        F.retrbinary("RETR " + rx, open(filename, 'wb').write)
+    except:
+        pass
+
 
 def getRinexNav(date:str = None,
                 odir:str = None):
@@ -55,7 +61,7 @@ def getRinexNav(date:str = None,
     odif: final directory to save the rinex files
     """
     # Parse cors url address
-    url =  urlparse('ftp://cddis.nasa.gov/gnss/products/ionex/')
+    # url =  urlparse('ftp://cddis.nasa.gov/gnss/products/ionex/')
     # Parse date
     try:
         if len(date.split('-')) == 3:
@@ -78,18 +84,30 @@ def getRinexNav(date:str = None,
         doy = str(doy)
     else: 
         print ('Error - Soomething is wrong with your day of year (DOY)')
+        
+        
+    ftps = ftplib.FTP_TLS(host='gdc.cddis.eosdis.nasa.gov')
+    ftps.login(user='anonymous', passwd='sebastijan.mrak@gmail.com')
+    ftps.prot_p()
+    rpath = 'gnss/products/ionex/' + year + '/' + doy + '/'
+    ftps.cwd(rpath)
+    urlrx = 'JPL0OPSRAP_' + year + doy + '0000_01D_02H_GIM.INX.gz' 
+    d = []
+    ftps.retrlines('LIST', d.append)
+    download(ftps, urlrx, odir+urlrx)
     
-    # Open a connection to the FTP address
-    with ftplib.FTP(url[1],'anonymous','guest',timeout=15) as F:
-        rpath = url[2] + '/' + year + '/' + doy + '/'
-        F.cwd(rpath)
-        urlrx = 'jplg' +doy + '0.' + year[-2:] + 'i.Z'
-        print (urlrx)
-        try:
-            # urlrx must in in a format "nnnDDD0.YYo.xxx"
-            download(F, urlrx, odir+urlrx)
-        except Exception as e:
-            print (e)
+    # # Open a connection to the FTP address
+    # with ftplib.FTP(url[1],'anonymous','guest',timeout=15) as F:
+    #     rpath = url[2] + '/' + year + '/' + doy + '/'
+    #     F.cwd(rpath)
+    #     # urlrx = 'jplg' +doy + '0.' + year[-2:] + 'i.Z'
+        
+    #     print (urlrx)
+    #     try:
+    #         # urlrx must in in a format "nnnDDD0.YYo.xxx"
+    #         download(F, urlrx, odir+urlrx)
+    #     except Exception as e:
+    #         print (e)
             
     unzip(odir+urlrx)
 if __name__ == '__main__':

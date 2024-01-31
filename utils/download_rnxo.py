@@ -287,6 +287,8 @@ def getRinexObs(date,
                'cors': 'https://geodesy.noaa.gov/corsdata/rinex/',
                'chain': 'http://chain.physics.unb.ca/data/gps/data/daily/',
                'euref': 'ftp://epncb.oma.be/pub/obs/',
+               'chile': 'http://gps.csn.uchile.cl/data/',
+               'brasil': 'http://geoftp.ibge.gov.br/informacoes_sobre_posicionamento_geodesico/rbmc/dados/',
                #'unavco': 'ftp://data-out.unavco.org/pub/rinex/obs/',
                'unavco': 'https://data.unavco.org/archive/gnss/rinex/obs/',
                #'unavcohr': 'ftp://data-out.unavco.org/pub/highrate/1-Hz/rinex/',
@@ -436,6 +438,7 @@ def getRinexObs(date,
             irx = np.isin(np.asarray(rxlist), rx)
             rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
         
+            
         if rxlist is not None:
             print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
             for rx in rxlist:
@@ -445,6 +448,73 @@ def getRinexObs(date,
         else:
             print ('{} wasnt found'.format(rx))
     
+    elif db == 'chile':
+        
+        url = f'{urllist[db]}/{year}/{doy}/'
+        stations_url = f'{urllist[db]}/CSN_GNSS.info'
+        
+        with urllib.request.urlopen(stations_url) as response:
+            html = response.read().decode('ascii').split('\n')
+            rxlist = []
+            for i,l in enumerate(html):
+                if i < 2:
+                    continue
+                try:
+                    rxn = l[:4]
+                    if len(rxn) == 4:
+                        rxlist.append(rxn.lower())
+                except:
+                    pass
+                del rxn
+        rxlist = np.unique(np.asarray(rxlist))
+        if isinstance(rx, str):
+            irx = np.isin(np.asarray(rxlist), rx)
+            rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
+        
+        if rxlist is not None:
+            print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+            for rx in rxlist:
+                path = f"{url}/{rx}{doy}0.{Y}d.Z"
+                ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
+                download_request(urlpath=path, filename=ofn, force=force)
+        else:
+            print ('{} wasnt found'.format(rx))
+#    elif db == 'euref':
+#                rpath = url[2] + '/' + year + '/' + doy + '/'
+#                F.cwd(rpath)
+#                # Get the name of all avaliable receivers in the direcotry
+#                rxlist = getStateList(year, doy, F, db, rxn=rx)
+#                # Download the data
+#                print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+#                for urlrx in rxlist:
+#                    # urlrx must in in a format "nnnDDD0.YYo.xxx"
+#                    download(F, urlrx, odir+urlrx,force=force)
+    elif db == 'brasil':
+        url = f'{urllist[db]}/{year}/{doy}/'
+        
+        rxlist = []
+        with urllib.request.urlopen(url) as response:
+            html = response.read().decode('ascii')
+            soup = BeautifulSoup(html, 'html.parser')
+            
+            for link in soup.find_all('a'):
+                if link.get('href') is not None and len(link.get('href')) == 12:
+                    rxlist.append(link.get('href')[:4])
+                    
+        if isinstance(rx, str):
+            irx = np.isin(np.asarray(rxlist), rx)
+            rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
+        
+            
+        if rxlist is not None:
+            print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+            for rx in rxlist:
+                path = f"{url}/{rx}{doy}1.zip"
+                ofn = f'{odir}{rx}{doy}1.zip'
+                download_request(urlpath=path, filename=ofn, force=force)
+        else:
+            print ('{} wasnt found'.format(rx))
+            
     else:
         raise('Wrong database')
 #    else:
@@ -513,7 +583,7 @@ if __name__ == '__main__':
     
     P = p.parse_args()
     if P.db == 'all':
-        a = ['cors', 'cddis', 'euref', 'unavco']
+        a = ['cors', 'cddis', 'unavco', 'brasil', 'chain', 'chile']
         for db in a:
             getRinexObs(date = P.date, db = db, 
                         odir = P.dir, rx = P.rx, dllist = P.dllist, 

@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from typing import Union
 from scipy import ndimage
 import matplotlib.pyplot as plt
+from scipy.interpolate import CubicSpline
 
 def getNeighbours(image,i,j, N=1, direction='both', mask=False):
     """
@@ -252,17 +253,39 @@ def getTimeSeries(time: Union[list, np.ndarray] = None,
     
     return {'t': time, 'y': timeseries}
 
-def tdft(t,y,T=30,nfft=1024,Nw=240,Nskip=1,window='hanning'):
-    Wn = signal.get_window(window,Nw)
-    f = np.fft.fftfreq(nfft,d=T) # to mHz
-    f = f[1:int(nfft/2)]
+def tdft(t,y,T=30,nfft=1024,Nw=240,Nskip=1,window='hanning', scaling='spectrum'):
+    
+    def _cubicSplineFit(x):
+        idf = np.isfinite(x)
+        x0 = np.where(idf)[0]
+        x1 = np.arange(x.size)
+        CSp = CubicSpline(x0, x[idf])
+        y = CSp(x1)
+        return y
+    
+    Wn = signal.get_window(window, Nw)
+    fs = 1 /T
+    f_max = fs / 2
+    df = 2 * f_max / nfft
+    f = np.round(np.arange(-f_max, f_max, df),5)
+#    f = np.fft.fftfreq(nfft) # to mHz
+    f = f[int(nfft/2):]
+    
+    if np.sum(np.isnan(y)) > 0:
+        y = _cubicSplineFit(y)
     
     Treducted = t[:-Nw]
     Tspecto = Treducted[::Nskip] + timedelta(seconds=Nw/2*T)
     
     for i in np.arange(0,y.shape[0]-Nw,Nskip):
-        Stmp = np.fft.fft(y[i:i+Nw]*Wn,n=nfft)
-        Sx1 = abs(Stmp[1:int(nfft/2)])**2
+        Stmp = np.fft.fft(y[i:i+Nw]*Wn, n=nfft)
+        if scaling == 'spectrum':
+            Sx1 = abs(Stmp[0:int(nfft/2)])**2 / Nw**2
+        elif scaling == 'psd':
+            Sx1 = abs(Stmp[0:int(nfft/2)])**2 / Nw * T
+        else:
+            Sx1 = abs(Stmp[0:int(nfft/2)])**2
+#        Sx1 = abs(Stmp)**2
         if i == 0:
             Sx = Sx1
         else:
