@@ -87,6 +87,7 @@ def getRinexNav(date:str = None,
         
         
     ftps = ftplib.FTP_TLS(host='gdc.cddis.eosdis.nasa.gov')
+    # ftps.connect(port=43094)
     ftps.login(user='anonymous', passwd='sebastijan.mrak@gmail.com')
     ftps.prot_p()
     rpath = 'gnss/products/ionex/' + year + '/' + doy + '/'

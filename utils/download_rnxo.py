@@ -6,7 +6,8 @@ Created on Fri Mar  3 13:19:38 2017
 @author: Sebastijan Mrak <smrak@gmail.com>
 """
 
-from six.moves.urllib.parse import urlparse
+# from six.moves.urllib.parse import urlparse
+import requests
 import ftplib
 import numpy as np
 import yaml
@@ -18,6 +19,11 @@ import platform
 from dateutil import parser
 import urllib.request
 from bs4 import BeautifulSoup
+from earthscope_sdk.auth.device_code_flow import DeviceCodeFlowSimple
+from earthscope_sdk.auth.auth_flow import NoTokensError
+from pathlib import Path
+#Change to your preference
+token_path = os.getcwd() + os.sep
 
 def download_request(urlpath, filename, force=False):
     # Check is destination directory exists?
@@ -26,10 +32,13 @@ def download_request(urlpath, filename, force=False):
     if not os.path.exists(path):
         #NO? Well, create the directory. 
         try:
-            if platform.system() == 'Linux':
-                subprocess.call('mkdir -p {}'.format(path), shell=True)
+            if platform.system() in ('Linux', 'Darwin'):
+                subprocess.call('mkdir -p "{}"'.format(path), shell=True)
             elif platform.system() == 'Windows':
                 subprocess.call('mkdir "{}"'.format(path), shell=True)
+            else:
+                print ("Unknown system; terminating the operation")
+                exit()
         except:
             print ('Cant make the directory')
     # Does the file already exists in the destination directory?
@@ -43,8 +52,8 @@ def download_request(urlpath, filename, force=False):
             with urllib.request.urlopen(urlpath, timeout=60) as response, open(filename, 'wb') as out_file:
                 data = response.read() # a `bytes` object
                 out_file.write(data)
-        except:
-            pass
+        except Exception as e:
+            print (e)
         # Else skip the step
     else:
         if force:
@@ -53,8 +62,8 @@ def download_request(urlpath, filename, force=False):
                 with urllib.request.urlopen(urlpath, timeout=60) as response, open(filename, 'wb') as out_file:
                     data = response.read() # a `bytes` object
                     out_file.write(data)
-            except:
-                pass
+            except Exception as e:
+                print (e)
         else:
             print ('{} File already exists'.format(tail))
 
@@ -275,10 +284,7 @@ def getRinexObs(date,
     assert odir is not None
     
     # Designator
-    if platform.system() == 'Linux':
-        des = '/'
-    elif platform.system() == 'Windows':
-        des = '\\'
+    des = os.sep
     # Dictionary with complementary FTP url addresses
     urllist = {#'cddis': 'ftp://cddis.gsfc.nasa.gov/gnss/data/daily/',
                'cddis': 'https://cddis.nasa.gov/archive/gnss/data/daily/',
@@ -288,7 +294,7 @@ def getRinexObs(date,
                'chain': 'http://chain.physics.unb.ca/data/gps/data/daily/',
                'euref': 'ftp://epncb.oma.be/pub/obs/',
                'chile': 'http://gps.csn.uchile.cl/data/',
-               'brasil': 'http://geoftp.ibge.gov.br/informacoes_sobre_posicionamento_geodesico/rbmc/dados/',
+               'brasil': 'https://geoftp.ibge.gov.br/informacoes_sobre_posicionamento_geodesico/rbmc/dados/',
                #'unavco': 'ftp://data-out.unavco.org/pub/rinex/obs/',
                'unavco': 'https://data.unavco.org/archive/gnss/rinex/obs/',
                #'unavcohr': 'ftp://data-out.unavco.org/pub/highrate/1-Hz/rinex/',
@@ -388,31 +394,50 @@ def getRinexObs(date,
     
     elif db == 'unavco':
         if hr:
-            dbhr = db+'hr'
-            url = f'{urllist[dbhr]}/{year}/{doy}/'
-            rxlist = []
-            with urllib.request.urlopen(url) as response:
-                html = response.read().decode('ascii')
-                soup = BeautifulSoup(html, 'html.parser')
+            db = db+'hr'
+            # url = f'{urllist[dbhr]}/{year}/{doy}/'
+            # rxlist = []
+            # with urllib.request.urlopen(url) as response:
+            #     html = response.read().decode('ascii')
+            #     soup = BeautifulSoup(html, 'html.parser')
+            #     for link in soup.find_all('a'):
+            #         if link.get('href') is not None and len(link.get('href')[:-1]) == 4:
+            #             rxlist.append(link.get('href')[:4])
+        # else:
+        url = f'{urllist[db]}/{year}/{doy}/'
+        device_flow = DeviceCodeFlowSimple(Path(token_path))
+        try:
+            # get access token from local path
+            device_flow.get_access_token_refresh_if_necessary()
+        except NoTokensError:
+            # if no token was found locally, do the device code flow
+            device_flow.do_flow()
+        token = device_flow.access_token
+        
+        rxlist = []
+        r = requests.get(url, headers={"authorization": f"Bearer {token}"})
+        if r.status_code == requests.codes.ok:
+            for data in r:
+                soup = BeautifulSoup(data.decode('ascii'), 'html.parser')
                 for link in soup.find_all('a'):
-                    if link.get('href') is not None and len(link.get('href')[:-1]) == 4:
-                        rxlist.append(link.get('href')[:4])
-        else:
-            url = f'{urllist[db]}/{year}/{doy}/'
-            rxlist = []
-            with urllib.request.urlopen(url) as response:
-                html = response.read().decode('ascii')
-                soup = BeautifulSoup(html, 'html.parser')
-                for link in soup.find_all('a'):
-                    if link.get('href') is not None and len(link.get('href')) == 14:
-                        rxlist.append(link.get('href')[:4])
-                    
+                    if link.get('href') is not None and len(link.get('href').split('/')[-1]) == 14:
+                        rxlist.append(link.get('href').split('/')[-1][:4])
+            
+            # with urllib.request.urlopen(url) as response:
+            #     html = response.read().decode('ascii')
+            #     soup = BeautifulSoup(html, 'html.parser')
+            #     for link in soup.find_all('a'):
+            #         if link.get('href') is not None and len(link.get('href')) == 14:
+            #             rxlist.append(link.get('href')[:4])
+        rxlist = np.unique(rxlist)
+    
         if isinstance(rx, str):
             irx = np.isin(np.asarray(rxlist), rx)
             rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
         
         if rxlist is not None:
             print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+            rxlist = np.unique(rxlist)
             for rx in rxlist:
                 if hr:
                     path = f"{url}/{rx}/{rx}{doy}0.{Y}d.Z"
@@ -420,7 +445,19 @@ def getRinexObs(date,
                 else:
                     path = f"{url}/{rx}{doy}0.{Y}d.Z"
                     ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
-                download_request(urlpath=path, filename=ofn, force=force)
+                if not os.path.exists(odir):
+                    print ("Making new directory:\n", odir)
+                    if platform.system() in ('Linux', 'Darwin'):
+                        subprocess.call(f'mkdir -p "{odir}"', shell=True)
+                    else:
+                        subprocess.call(f'mkdir "{odir}"', shell=True)
+                with open(ofn, 'wb') as f:
+                    print (f"Downloading {path}:")
+                    r = requests.get(path, headers={"authorization": f"Bearer {token}"})
+                    for data in r:
+                        f.write(data)
+                f.close()
+                #download_request(urlpath=path, filename=ofn, force=force)
         else:
             print ('{} wasnt found'.format(rx))
     
@@ -491,15 +528,17 @@ def getRinexObs(date,
 #                    download(F, urlrx, odir+urlrx,force=force)
     elif db == 'brasil':
         url = f'{urllist[db]}/{year}/{doy}/'
-        
         rxlist = []
-        with urllib.request.urlopen(url) as response:
-            html = response.read().decode('ascii')
-            soup = BeautifulSoup(html, 'html.parser')
-            
-            for link in soup.find_all('a'):
-                if link.get('href') is not None and len(link.get('href')) == 12:
-                    rxlist.append(link.get('href')[:4])
+        # with urllib.request.urlopen(url) as response:
+        #     html = response.read().decode('ascii')
+        #     soup = BeautifulSoup(html, 'html.parser')
+        r = requests.get(url)
+        if r.status_code == requests.codes.ok:
+            for data in r:
+                soup = BeautifulSoup(data.decode('ascii'), 'html.parser')
+                for link in soup.find_all('a'):
+                    if link.get('href') is not None and len(link.get('href')) == 12:
+                        rxlist.append(link.get('href')[:4])
                     
         if isinstance(rx, str):
             irx = np.isin(np.asarray(rxlist), rx)
