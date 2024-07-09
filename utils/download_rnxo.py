@@ -23,7 +23,8 @@ from earthscope_sdk.auth.device_code_flow import DeviceCodeFlowSimple
 from earthscope_sdk.auth.auth_flow import NoTokensError
 from pathlib import Path
 #Change to your preference
-token_path = os.getcwd() + os.sep
+
+token_path = os.path.expanduser("~") + '/pyGnss/utils/'
 
 def download_request(urlpath, filename, force=False):
     # Check is destination directory exists?
@@ -535,7 +536,7 @@ def getRinexObs(date,
         r = requests.get(url)
         if r.status_code == requests.codes.ok:
             for data in r:
-                soup = BeautifulSoup(data.decode('ascii'), 'html.parser')
+                soup = BeautifulSoup(data.decode('ascii', 'ignore'), 'html.parser')
                 for link in soup.find_all('a'):
                     if link.get('href') is not None and len(link.get('href')) == 12:
                         rxlist.append(link.get('href')[:4])
@@ -628,7 +629,7 @@ if __name__ == '__main__':
                         odir = P.dir, rx = P.rx, dllist = P.dllist, 
                         hr = P.highrate, force = P.force, fix = P.fixpath)
     elif P.db == 'conus':
-        a = ['cors', 'unavco', 'cddis']
+        a = ['cors', 'unavco', 'cddis', 'chain']
         for db in a:
             getRinexObs(date = P.date, db = db, 
                         odir = P.dir, rx = P.rx, dllist = P.dllist, 
