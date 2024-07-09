@@ -23,6 +23,7 @@ from earthscope_sdk.auth.device_code_flow import DeviceCodeFlowSimple
 from earthscope_sdk.auth.auth_flow import NoTokensError
 from pathlib import Path
 import ssl
+
 ssl._create_default_https_context = ssl._create_unverified_context
 #Change to your preference
 token_path = os.getcwd() + os.sep
@@ -249,6 +250,12 @@ def getStateList(year, doy, F, db, rxn=None, hr=False):
                         stations.append(rx)
                     except:
                         pass
+        elif db == 'ring':
+            for line in d:
+                arg = line.split()[-1]
+                if arg[-2:] in('gz', '.Z', 'ip'):
+                    stations.append(arg)
+            stations = np.array(stations)
         elif db == 'euref':
             for line in d:
                 arg = line.split()[-1]
@@ -299,7 +306,7 @@ def getRinexObs(date,
                'brasil': 'https://geoftp.ibge.gov.br/informacoes_sobre_posicionamento_geodesico/rbmc/dados/',
                'unavco': 'https://data.unavco.org/archive/gnss/rinex/obs/',
                'unavcohr': 'https://data.unavco.org/archive/gnss/highrate/1-Hz/rinex/',
-               'ring': 'ftp://bancadati2.gm.ingv.it:2121/OUTGOING/RINEX30/RING/'}
+               'ring': 'bancadati2.gm.ingv.it',}
     try:
         if len(date.split('-')) == 3:
             dt = parser.parse(date)
@@ -584,6 +591,16 @@ def getRinexObs(date,
         else:
             print ('{} wasnt found'.format(rx))
             
+    elif db == 'ring':
+        url = urllist[db]
+        ftp = ftplib.FTP(url)
+        ftp.login()
+        rpath = f'/OUTGOING/RINEX30/RING/{year}/{doy}/'
+        ftp.cwd(rpath)
+        rxlist = np.array(getStateList(year, doy, ftp, db, rxn=rx))
+        # print (rxlist)
+        for urlrx in rxlist:
+            download_cddis(ftp, urlrx, odir+urlrx, force=force)
     else:
         raise('Wrong database')
 
