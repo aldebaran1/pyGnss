@@ -110,7 +110,7 @@ def slantTEC(C1, C2, L1, L2, frequency = 2):
     
     return phasetec + N
 
-def getPhaseCorrTEC(L1, L2, P1, P2, satbias=None, tec_err=False, channel=2,
+def getPhaseCorrTEC(L1, L2, P1, P2, tec_err=False, channel=2,
                     intervals=None, fN = None, maxgap=3, maxjump=2):
     """
     Greg Starr
@@ -247,19 +247,20 @@ def retreiveDTECfromPhase(L, f=f1, units='cycle'):
     else:
         raise ('Enter an appropriate name for units')
     return dTEC * -1
+
 #%% Indexes
-def getROTI(tec, length):
-    """
-    Sebastijan Mrak
-    getROTI returns the rate of TEC Index calculated as the standard deviation 
-    of the provided TEC on the moving window of the length 'length'. It returns 
-    the ROTI as a numpy array data type.
-    """
-    roti = []    
-    for i in range(len(tec)-length):
-        roti.append(np.std(tec[i:i+length]))
+# def getROTI(tec, length):
+#     """
+#     Sebastijan Mrak
+#     getROTI returns the rate of TEC Index calculated as the standard deviation 
+#     of the provided TEC on the moving window of the length 'length'. It returns 
+#     the ROTI as a numpy array data type.
+#     """
+#     roti = []    
+#     for i in range(len(tec)-length):
+#         roti.append(np.std(tec[i:i+length]))
     
-    return np.array(roti)
+#     return np.array(roti)
     
 
 def phaseScintillationIndex(data, N):
@@ -278,14 +279,17 @@ def AmplitudeScintillationIndex(data, N):
     GNSS Amplitude scintillation index for the interval of the length 'N' samples
     """
     y = np.nan * np.zeros(data.shape[0])
-    for i in range(data.shape[0] - N):
-        y[i] = np.std(data[i:i+N] / np.mean(data[i:i+N]))
+    for i in range(int(N/2-1), data.shape[0] - N):
+        if np.sum(np.isfinite(data[i-int(N/2) : i+int(N/2)])) > N/2:
+            y[i] = np.std(data[i-int(N/2) : i+int(N/2)] / np.mean(data[i-int(N/2):i+int(N/2)]))
     return y
 
 def gpsSatPositionSP3(fsp3, dt, sv=None, rx_position=None, coords='xyz'):
     assert sv is not None
     # Read in data
     D = gr.load(fsp3).sel(sv=sv)
+    if isinstance(dt, datetime):
+        dt = [dt]
     if isinstance(dt, list):
         dt = np.asarray(dt)
     dt = dt.astype('datetime64[s]')
@@ -457,7 +461,8 @@ def aer2ipp(az, el, rxp, H=350):
     Req = 6378.137
     f = 1/298.257223563
     
-    
+    if not isinstance(rxp, np.ndarray):
+        rxp = np.array(rxp)
     if len(rxp.shape) == 1:
         lat0 = rxp[0]
         lon0 = rxp[1]
@@ -474,11 +479,9 @@ def aer2ipp(az, el, rxp, H=350):
     
     lon = np.radians(lon0) + np.arcsin(np.sin(psi) * np.sin(np.radians(az)) / np.cos(lat))
     
-    ipp = np.nan * np.ones((2, lon.shape[0], lon.shape[1]))
-    ipp[0,:,:] = np.degrees(lat)
-    ipp[1,:,:] = np.degrees(lon)
-    
-    return ipp
+    # ipp = np.vstack((np.degrees(lat), np.degrees(lon)))
+    # print (az.shape, R.shape, psi.shape, lat.shape, lon.shape)
+    return np.degrees(lat), np.degrees(lon)
 
 
 def getMappingFunction(el, h):
@@ -1086,7 +1089,7 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
             else:
                 idel = np.ones(dt.size, dtype=bool)
             if return_aer:
-                if aer not in locals():
+                if 'aer' not in locals():
                     aer = getIonosphericPiercingPoints(D.position, sv, dt, 
                                                    ipp_alt=H, navfn=fsp3,
                                                    cs='aer', rx_xyz_coords='xyz')
@@ -1104,15 +1107,20 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
         return stec
 
 def getVTEC(fnc, fsp3, dcb=None, jplg_file=None, el_mask=30, H=350,
-            tskip=None, maxgap=1, maxjump=1.6, tec_shift=None,
-            return_mapping_function=False, return_aer=False):
+            decimate=None, maxgap=1, maxjump=1.6, tec_shift=None,
+            return_mapping_function=False, return_aer=False,
+            L1='L1', L2='L2', P1='C1', P2='P2'):
     if tec_shift is None: tec_shift = 0
     if dcb is None:
 #        assert jplg_file is not None
 #        assert os.path.exists(jplg_file)
         dcb = getDCB(fnc, fsp3, jplg_file=jplg_file, el_mask=30, H=350,
-                 tskip=None, maxgap=1, maxjump=1.6)
-    D = gr.load(fnc)
+                 decimate=decimate, maxgap=1, maxjump=1.6,
+                 L1=L1, L2=L2, P1=P1, P2=P2)
+    if isinstance(fnc,str): 
+        D = gr.load(fnc, use='G')
+    else:
+        D = fnc
     assert dcb.size == D.sv.size
     dt = np.array([np.datetime64(ttt) for ttt in D.time.values])
     vtec = np.nan * np.zeros((dt.size, D.sv.size))
@@ -1127,8 +1135,8 @@ def getVTEC(fnc, fsp3, dcb=None, jplg_file=None, el_mask=30, H=350,
         idel = (aer[1] >= el_mask)
         if return_mapping_function:
             F[idel, isv] = getMappingFunction(aer[1][idel], h=H)
-        vtec[idel, isv] = (getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
-                                     P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv],
+        vtec[idel, isv] = (getPhaseCorrTEC(L1=D[L1].values[idel,isv], L2=D[L2].values[idel,isv],
+                                     P1=D[P1].values[idel,isv], P2=D[P2].values[idel,isv],
                                      maxgap=maxgap, maxjump=maxjump) - dcb[isv] + tec_shift) * getMappingFunction(aer[1][idel], h=H)
         if return_aer:
             AER[idel, isv, 0] = aer[0][idel]
@@ -1168,8 +1176,9 @@ def getVTEC2(D, F, tskip=1, el_mask=30, maxgap=1, maxjump=1):
     
     return vtec
 
-def getDCBfromSTEC(stec, aer, el_mask=30, H=350, ts=30, decimate=False,
-                   x0 = None, tskip = None, return_mapping_f = False):
+def getDCBfromSTEC(y, aer, el_mask=30, H=350, ts=30, decimate=False,
+                   x0 = None, tskip = None, return_mapping_f = False,
+                   ROTI=None, ROTIc= 0.4, SNRc=30, SNR=None):
     def _fun(p, stec, F):
         vtec = (stec - p) * F
         ret = np.nansum(np.nanstd(vtec, axis=1)**2)
@@ -1179,6 +1188,14 @@ def getDCBfromSTEC(stec, aer, el_mask=30, H=350, ts=30, decimate=False,
         tskip = int(target/ts)
     else:
         tskip = 1
+    idnan = np.zeros(y.shape, dtype=bool)
+    if ROTI is not None:
+        idnan = np.logical_or(idnan, ROTI >= ROTIc)
+    if SNR is not None:
+        idnan = np.logical_or(idnan, SNR < SNRc)
+    stec = np.copy(y)
+    stec[idnan] = np.nan
+    
     stec = stec[::tskip, :]
     F = np.nan * np.copy(stec)
     for isv in range(stec.shape[1]):
@@ -1194,19 +1211,25 @@ def getDCBfromSTEC(stec, aer, el_mask=30, H=350, ts=30, decimate=False,
         return sb_lsq.x
 
 def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350, 
-            tskip=None, maxgap=1, maxjump=1.6,
-            return_mapping_function=False, return_aer=False):
+            decimate=None, maxgap=1, maxjump=1.6,
+            return_mapping_function=False, return_aer=False,
+            L1='L1', L2='L2', P1='C1', P2='P2'):
     
     def _fun(p, stec, F):
         vtec = (stec - p) * F
         ret = np.nansum(np.nanstd(vtec, axis=1)**2)
         return ret
-    D = gr.load(fnc)
+    if isinstance(fnc, str):
+        D = gr.load(fnc, use='G')
+    else:
+        D = fnc
     dt0 = np.array([np.datetime64(ttt) for ttt in D.time.values])
-    if tskip is None:
+    if decimate is None:
         target = 60
         ts = np.int16(np.timedelta64(np.diff(dt0)[0], 's'))
         tskip = int(target/ts)
+    else:
+        tskip = decimate
     dt = dt0[::tskip]
     stec = np.nan * np.zeros((dt.size, D.sv.size))
     F = np.nan * np.zeros((dt.size, D.sv.size))
@@ -1227,8 +1250,8 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
                                            navfn=fsp3, cs='aer', 
                                            rx_xyz_coords='xyz')
             idel0 = (aer0[1] >= el_mask)
-        stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[::tskip][idel,isv], L2=D.L2.values[::tskip][idel,isv],
-                                     P1=D.C1.values[::tskip][idel,isv], P2=D.P2.values[::tskip][idel,isv],
+        stec[idel, isv] = getPhaseCorrTEC(L1=D[L1].values[::tskip][idel,isv], L2=D[L2].values[::tskip][idel,isv],
+                                     P1=D[P1].values[::tskip][idel,isv], P2=D[P2].values[::tskip][idel,isv],
                                      maxgap=maxgap, maxjump=maxjump)
 #        penalty = np.nan * np.copy(stec)
 #        for i in range(stec.shape[1]):
@@ -1259,23 +1282,23 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
     else:
         return sb_lsq.x
 
-def getCNR(D, fsp3=None, el_mask=30, H=350):
+def getCNR(D, fsp3=None, el_mask=30, H=350, key='S1'):
     if isinstance(D, str):
         D = gr.load(D)
     
     time = D.time.values
     try:
-        CNO = D.S1.values
+        CNO = D[key].values
 
         if fsp3 is not None:
             assert os.path.exists(fsp3)
             dt = np.array([np.datetime64(ttt) for ttt in time]).astype('datetime64[s]').astype(datetime)
             for isv, sv in enumerate(D.sv.values):
                 aer = getIonosphericPiercingPoints(D.position, sv, dt, 
-                                                          ipp_alt=H, navfn=fsp3,
-                                                          cs='aer', rx_xyz_coords='xyz')
-                idel = (aer[1] >= el_mask)
-                CNO[~idel, isv] = np.nan
+                                                  ipp_alt=H, navfn=fsp3,
+                                                  cs='aer', rx_xyz_coords='xyz')
+                idel = (aer[1] < el_mask)
+                CNO[idel, isv] = np.nan
     except:
         CNO = None
     return CNO
