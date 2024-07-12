@@ -28,6 +28,8 @@ ssl._create_default_https_context = ssl._create_unverified_context
 #Change to your preference
 token_path = os.getcwd() + os.sep
 
+hhindd = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23']
+
 def download_request(urlpath, filename, force=False):
     # Check is destination directory exists?
     path, tail = os.path.split(filename)
@@ -43,7 +45,7 @@ def download_request(urlpath, filename, force=False):
                 print ("Unknown system; terminating the operation")
                 exit()
         except:
-            print ('Cant make the directory')
+            print ('Cant create the directory')
     # Does the file already exists in the destination directory?
     flist = sorted(glob(path+'/*'))
     fnlist = np.array([os.path.splitext(f)[0] for f in flist])
@@ -78,12 +80,12 @@ def download_cddis(F, rx, filename, force=False):
     if not os.path.exists(path):
         #NO? Well, create the directory. 
         try:
-            if platform.system() == 'Linux':
+            if platform.system() in ('Linux', 'Darwin'):
                 subprocess.call('mkdir -p {}'.format(path), shell=True)
             elif platform.system() == 'Windows':
                 subprocess.call('mkdir "{}"'.format(path), shell=True)
         except:
-            print ('Cant make the directory')
+            print ('Cant create the directory')
     # Does the file already exists in the destination directory?
     flist = sorted(glob(path+'/*'))
     fnlist = np.array([os.path.splitext(f)[0] for f in flist])
@@ -104,43 +106,7 @@ def download_cddis(F, rx, filename, force=False):
                 pass
         else:
             print ('{} File already exists'.format(tail))
-
-def download(F, rx, filename,force=False):
-    def _dl(F,rx):
-        try:
-            with open(filename, 'wb') as h:
-                F.retrbinary('RETR {}'.format(rx), h.write)
-        except Exception as e:
-            print (e)
-        return
-    
-    # Check is destination directory exists?
-    path, tail = os.path.split(filename)
-    
-    if not os.path.exists(path):
-        #NO? Well, create the directory. 
-        try:
-            if platform.system() == 'Linux':
-                subprocess.call('mkdir -p {}'.format(path), shell=True)
-            elif platform.system() == 'Windows':
-                subprocess.call('mkdir "{}"'.format(path), shell=True)
-        except:
-            print ('Cant make the directory')
-    # Does the file already exists in the destination directory?
-    flist = sorted(glob(path+'/*'))
-    fnlist = np.array([os.path.splitext(f)[0] for f in flist])
-    if np.isin(filename, fnlist):
-        # Do you want to override it?
-        if force:
-            _dl(F, rx)
-        # Else skip the step
-        else:
-            print ('{} File already exists'.format(tail))
-    # Else Download the file
-    else:
-        print ('Downloading file: {}'.format(tail))
-        _dl(F, rx)
-        
+            
 def getSingleRxUrl(year, doy, F, db, rxn, hr=False):
     d = []
     F.retrlines('LIST', d.append)
@@ -158,6 +124,7 @@ def getSingleRxUrl(year, doy, F, db, rxn, hr=False):
         idrx = np.where(np.isin(ds,match))[0]
         if idrx.shape[0] > 0:
             stations = ds[idrx]
+            
     elif db == 'cddis' and hr:
         stations = []
         for line in d:
@@ -234,13 +201,34 @@ def getStateList(year, doy, F, db, rxn=None, hr=False):
                     argclober = arg.split('.')
                     if (len(argclober[0]) == 8) or (len(argclober[0].split('_'))==6):
                         stations.append(arg)
+                        
         elif db == 'cddis' and hr:
             stations = []
-            for line in d:
-                arg = line.split()[-1]
-                if (arg[-2:] == '.Z') or (arg[-2:] == 'ip') or (arg[-2:] == 'gz'):
-                    stations.append(arg)
-            stations = np.array(stations)
+            if len(d) < 20 and len(d[0].split()[-1]) == 3:
+                F.cwd(f'{year[-2:]}d/')
+                for i, hh in enumerate(hhindd):
+                    # print (i, hh)
+                    d = []
+                    F.cwd(f'{hh}/')
+                    F.retrlines('LIST', d.append)
+                    # print (d)
+                    for line in d:
+                        arg = line.split()[-1]
+                        if arg[-3:] == '.gz':
+                            stations.append(arg)
+                    F.cwd('../')
+                    
+            
+            else:
+                for line in d:
+                    arg = line.split()[-1]
+                    if arg[-3:] == 'tar':
+                        if "MO.crx.tar" in arg.split('_'):
+                            stations.append(arg)
+                        elif f"{year[-2:]}d" in arg.split('.'):
+                            stations.append(arg)
+                        else:
+                            pass
         elif db == 'cors':
             for line in d:
                 arg = line.split()[-1]
@@ -297,7 +285,7 @@ def getRinexObs(date,
     # Dictionary with complementary FTP url addresses
     urllist = {#'cddis': 'ftp://cddis.gsfc.nasa.gov/gnss/data/daily/',
                'cddis': 'https://cddis.nasa.gov/archive/gnss/data/daily/',
-               'cddishr': 'ftp://ftp.cddis.eosdis.nasa.gov/gps/data/highrate/',
+               'cddishr': 'https://cddis.nasa.gov/archive/gnss/data/highrate/',
                #'cors':  'ftp://geodesy.noaa.gov/cors/rinex/',
                'cors': 'https://geodesy.noaa.gov/corsdata/rinex/',
                'chain': 'http://chain.physics.unb.ca/data/gps/data/daily/',
@@ -368,13 +356,27 @@ def getRinexObs(date,
         ftps.login(user='anonymous', passwd='sebastijan.mrak@gmail.com')
         ftps.prot_p()
         #This one is tricky because it contains Rinex2 and Rinex3 files that do not overlap
-        rpath = 'gnss/data/daily/' + year + '/' + doy + '/' + Y + 'd/'
+        if not hr:
+            rpath = 'gnss/data/daily/' + year + '/' + doy + '/' + Y + 'd/'
+        else:
+            rpath = 'gnss/data/highrate/' + year + '/' + doy + '/'
         ftps.cwd(rpath)
-        #rinex2
-        rxlist = np.array(getStateList(year, doy, ftps, db, rxn=rx))
+        rxlist = np.array(getStateList(year, doy, ftps, db, hr=hr))
+
         rxnames = np.array([r[:4].lower() for r in rxlist])
-        _, ix = np.unique(rxnames, return_index=True)
-        rxlist = rxlist[ix]
+        if not hr:
+            _, ix = np.unique(rxnames, return_index=True)
+            rxlist = rxlist[ix]
+            rxnames = rxnames[ix]
+        if isinstance(rx, str):
+            irx = np.isin(rxnames, rx.lower())
+            rxlist = rxlist[irx]
+            rxlen = np.array([len(r) for r in rxlist])
+            lens, _ = np.unique(rxlen, return_index=True)
+            if lens.size > 1:
+                keeper = max(lens)
+                ilens = np.isin(rxlen, keeper)
+                rxlist = rxlist[ilens]
         print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
         for urlrx in rxlist:
             download_cddis(ftps, urlrx, odir+urlrx,force=force)
@@ -417,23 +419,23 @@ def getRinexObs(date,
         rxlist = []
         if hr:
             db = db+'hr'
-            url = f'{urllist[db]}/{year}/{doy}/'
-            r = requests.get(url, headers={"authorization": f"Bearer {token}"}, verify=False)
+            url = f'{urllist[db]}{year}/{doy}/'
+            r = requests.get(url, headers={"authorization": f"Bearer {token}"})#,verify=False)
+            d = []
             if r.status_code == requests.codes.ok:
                 for data in r:
-                    soup = BeautifulSoup(data.decode('ascii'), 'html.parser')
-                    for link in soup.find_all('a'):
-                        if len(link.get('href').split('/')[-2]) == 4:
-                            rxlist.append(link.get('href').split('/')[-2])
+                    d.append(data.decode('ascii').replace('\n',''))
+            soup = BeautifulSoup("".join(d), 'html.parser')
+            for link in soup.find_all('a'):
+                if len(link.get('href').split('/')[-2]) == 4:
+                    rxlist.append(link.get('href').split('/')[-2])
             rxlist = np.unique(rxlist)
-            
             if isinstance(rx, str):
                 irx = np.isin(np.asarray(rxlist), rx)
                 rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
             
             if rxlist is not None:
                 print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-                rxlist = np.unique(rxlist)
                 for rx in rxlist:
                     path = f"{url}/{rx}/{rx}{doy}0.{Y}d.Z"
                     ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
@@ -445,7 +447,7 @@ def getRinexObs(date,
                             subprocess.call(f'mkdir "{odir}"', shell=True)
                     with open(ofn, 'wb') as f:
                         print (f"Downloading {path}:")
-                        r = requests.get(path, headers={"authorization": f"Bearer {token}"}, verify=False)
+                        r = requests.get(path, headers={"authorization": f"Bearer {token}"})#, verify=False)
                         for data in r:
                             f.write(data)
                     f.close()
@@ -456,21 +458,21 @@ def getRinexObs(date,
             url = f'{urllist[db]}/{year}/{doy}/'
         
             r = requests.get(url, headers={"authorization": f"Bearer {token}"}, verify=False)
+            d = []
             if r.status_code == requests.codes.ok:
                 for data in r:
-                    soup = BeautifulSoup(data.decode('ascii'), 'html.parser')
-                    for link in soup.find_all('a'):
-                        if link.get('href') is not None and len(link.get('href').split('/')[-1]) == 14:
-                            rxlist.append(link.get('href').split('/')[-1][:4])
+                    d.append(data.decode('ascii').replace('\n',''))
+            soup = BeautifulSoup("".join(d), 'html.parser')
+            for link in soup.find_all('a'):
+                if link.get('href') is not None and len(link.get('href').split('/')[-1]) == 14:
+                    rxlist.append(link.get('href').split('/')[-1][:4])
             rxlist = np.unique(rxlist)
-        
             if isinstance(rx, str):
                 irx = np.isin(np.asarray(rxlist), rx)
                 rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
             
             if rxlist is not None:
                 print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-                rxlist = np.unique(rxlist)
                 for rx in rxlist:
                     if hr:
                         path = f"{url}/{rx}/{rx}{doy}0.{Y}d.Z"
@@ -490,7 +492,6 @@ def getRinexObs(date,
                         for data in r:
                             f.write(data)
                     f.close()
-                #download_request(urlpath=path, filename=ofn, force=force)
             else:
                 print ('{} wasnt found'.format(rx))
 
