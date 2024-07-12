@@ -13,7 +13,8 @@ from glob import glob
 import platform, urllib.request
 from datetime import datetime
 from dateutil import parser
-
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 def unzip(f, timeout=10):
     head, tail = os.path.split(f)
     print ('Unzipping: ', tail)
@@ -94,12 +95,22 @@ def getRinexNav(date:str = None,
     gpsweek = int(ts / 60 /60 / 24 / 7)
     weekday = (dt.weekday() + 1 ) % 7
     wwwwd = str(gpsweek) + str(weekday)
+    
+    # ftps = ftplib.FTP_TLS(host='gdc.cddis.eosdis.nasa.gov')
+    # ftps.login(user='anonymous', passwd='sebastijan.mrak@gmail.com')
+    # ftps.prot_p()
+    # rpath = f'{wwwwd}'
+    # ftps.cwd(rpath)
+    # https://cddis.nasa.gov/archive/gnss/products/
 
     # Use HTTPS acces
     urlnav = f"{url}/{year}/{doy}/brdc{doy}0.{Y}n.gz"
     urlsp3 = f"{url}/{year}/{doy}/igs{wwwwd}.sp3.gz"
+    urlsp3_r3 = f'{url}/{year}/{doy}/IGS0OPSRAP_{dt.strftime("%Y%j")}0000_01D_15M_ORB.SP3.gz'
     navfile = f'{odir}brdc{doy}0.{Y}n.gz'
     sp3file = f'{odir}igs{doy}0.{Y}sp3.gz'
+    sp3file_r3 = f'{odir}IGS0OPSRAP_{dt.strftime("%Y%j")}0000_01D_15M_ORB.SP3.gz'
+    
     print (f'Downloading {urlnav}')
     with urllib.request.urlopen(urlnav, timeout=60) as response, open(navfile, 'wb') as out_file:
         data = response.read() # a `bytes` object
@@ -110,6 +121,11 @@ def getRinexNav(date:str = None,
         data = response.read() # a `bytes` object
         out_file.write(data)
     unzip_rm(sp3file)
+    print (f'Downloading {urlsp3_r3}')
+    with urllib.request.urlopen(urlsp3_r3, timeout=60) as response, open(sp3file_r3, 'wb') as out_file:
+        data = response.read() # a `bytes` object
+        out_file.write(data)
+    unzip_rm(sp3file_r3)
     return
 if __name__ == '__main__':
     from argparse import ArgumentParser
