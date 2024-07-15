@@ -215,8 +215,10 @@ def getStateList(year, doy, F, db, rxn=None, hr=False):
                     for line in d:
                         arg = line.split()[-1]
                         if arg[-3:] == '.gz':
-                            stations.append(arg)
+                            stations.append(f"{year[-2:]}d/{hh}/{arg}")
+                            # stations.append(f'{hh}/{arg}')
                     F.cwd('../')
+                F.cwd('../')
                     
             
             else:
@@ -363,11 +365,16 @@ def getRinexObs(date,
         ftps.cwd(rpath)
         rxlist = np.array(getStateList(year, doy, ftps, db, hr=hr))
 
-        rxnames = np.array([r[:4].lower() for r in rxlist])
+        
         if not hr:
+            rxnames = np.array([r[:4].lower() for r in rxlist])
             _, ix = np.unique(rxnames, return_index=True)
             rxlist = rxlist[ix]
             rxnames = rxnames[ix]
+        else:
+            rxnames = np.array([r.split("/")[-1][:4].lower() for r in rxlist])
+            
+        # print (rxnames)
         if isinstance(rx, str):
             irx = np.isin(rxnames, rx.lower())
             rxlist = rxlist[irx]
@@ -378,8 +385,16 @@ def getRinexObs(date,
                 ilens = np.isin(rxlen, keeper)
                 rxlist = rxlist[ilens]
         print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-        for urlrx in rxlist:
-            download_cddis(ftps, urlrx, odir+urlrx,force=force)
+        if not hr:
+            for urlrx in rxlist:
+                download_cddis(ftps, urlrx, odir+urlrx,force=force)
+        else:
+            for rx in rxlist:
+                pth = rx.split('/')
+                ftps.cwd(f'{pth[0]}/{pth[1]}/')
+                download_cddis(ftps, pth[2], odir+pth[2], force=force)
+                ftps.cwd('../')
+                ftps.cwd('../')
             
     elif db == 'chain':
         url = f'{urllist[db]}/{year}/{doy}/{Y}d/'
