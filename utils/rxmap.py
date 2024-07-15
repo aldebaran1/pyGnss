@@ -21,7 +21,7 @@ def getCoord(fn):
     
     return lon, lat
 
-def plotMap(fn,lonlim=None,latlim=None):
+def plotMap(fn,lonlim=None,latlim=None, projection='stereo'):
     if os.path.splitext(fn)[1] in ('.h5', '.hdf5'):
         root, fname = os.path.split(fn)
         if latlim is None:
@@ -60,7 +60,8 @@ def plotMap(fn,lonlim=None,latlim=None):
             y1 = Y+2 if Y+2 < 90 else 90
             
             latlim = [round(y0), round(y1)]
-        gm.plotCartoMap(latlim=latlim,lonlim=lonlim, projection='merc')
+        gm.plotCartoMap(latlim=latlim,lonlim=lonlim, projection=projection,
+                        states=1, background_color='gray')
         
     else:
         print ('Wrong file format')
@@ -80,6 +81,7 @@ if __name__ == '__main__':
     p.add_argument('hdffile',type=str)
     p.add_argument('-x', '--lonlim', type=float, nargs=2, default = None)
     p.add_argument('-y', '--latlim', type=float, nargs=2, default = None)
+    p.add_argument('--proj', type=str, default = 'stereo')
     
     P = p.parse_args()
-    plotMap(P.hdffile, P.lonlim, P.latlim)
+    plotMap(P.hdffile, P.lonlim, P.latlim, P.proj)
