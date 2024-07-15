@@ -435,7 +435,7 @@ def getRinexObs(date,
         if hr:
             db = db+'hr'
             url = f'{urllist[db]}{year}/{doy}/'
-            r = requests.get(url, headers={"authorization": f"Bearer {token}"}, verify=False)
+            r = requests.get(url, headers={"authorization": f"Bearer {token}"},verify=False)
             d = []
             if r.status_code == requests.codes.ok:
                 for data in r:
