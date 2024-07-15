@@ -35,7 +35,7 @@ def plotMap(fn,lonlim=None,latlim=None, projection='stereo'):
         lon, lat = getCoord(fn)
     elif os.path.splitext(fn)[1] in ('.yaml', '.yml'):
         root, fname = os.path.split(fn)
-        stream = yaml.load(open(fn, 'r'), Loader=yaml.SafeLoader())
+        stream = yaml.safe_load(open(fn, 'r'))
         data = array(stream['rx'])
         lon = data[:, 1].astype(float16)
         lat = data[:, 2].astype(float16)
