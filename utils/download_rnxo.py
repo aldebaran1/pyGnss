@@ -435,7 +435,7 @@ def getRinexObs(date,
         if hr:
             db = db+'hr'
             url = f'{urllist[db]}{year}/{doy}/'
-            r = requests.get(url, headers={"authorization": f"Bearer {token}"})#,verify=False)
+            r = requests.get(url, headers={"authorization": f"Bearer {token}"}, verify=False)
             d = []
             if r.status_code == requests.codes.ok:
                 for data in r:
@@ -462,7 +462,7 @@ def getRinexObs(date,
                             subprocess.call(f'mkdir "{odir}"', shell=True)
                     with open(ofn, 'wb') as f:
                         print (f"Downloading {path}:")
-                        r = requests.get(path, headers={"authorization": f"Bearer {token}"})#, verify=False)
+                        r = requests.get(path, headers={"authorization": f"Bearer {token}"}, verify=False)
                         for data in r:
                             f.write(data)
                     f.close()
@@ -503,7 +503,7 @@ def getRinexObs(date,
                             subprocess.call(f'mkdir "{odir}"', shell=True)
                     with open(ofn, 'wb') as f:
                         print (f"Downloading {path}:")
-                        r = requests.get(path, headers={"authorization": f"Bearer {token}"})
+                        r = requests.get(path, headers={"authorization": f"Bearer {token}"}, verify=False)
                         for data in r:
                             f.write(data)
                     f.close()
