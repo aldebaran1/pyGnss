@@ -291,6 +291,7 @@ def getRinexObs(date,
                #'cors':  'ftp://geodesy.noaa.gov/cors/rinex/',
                'cors': 'https://geodesy.noaa.gov/corsdata/rinex/',
                'chain': 'http://chain.physics.unb.ca/data/gps/data/daily/',
+               'chainhr': 'http://chain.physics.unb.ca/data/gps/data/highrate/',
                'euref': 'https://epncb.oma.be/pub/RINEX/',
                'chile': 'http://gps.csn.uchile.cl/data/',
                'brasil': 'https://geoftp.ibge.gov.br/informacoes_sobre_posicionamento_geodesico/rbmc/dados/',
@@ -397,26 +398,52 @@ def getRinexObs(date,
                 ftps.cwd('../')
             
     elif db == 'chain':
-        url = f'{urllist[db]}/{year}/{doy}/{Y}d/'
+        
         
         rxlist = []
-        with urllib.request.urlopen(url) as response:
-            html = response.read().decode('ascii')
-            soup = BeautifulSoup(html, 'html.parser')
-            for link in soup.find_all('a'):
-                if link.get('href') is not None and len(link.get('href')) == 14:
-                    rxlist.append(link.get('href')[:4])
-                    
-        if isinstance(rx, str):
-            irx = np.isin(np.asarray(rxlist), rx)
-            rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
+        if hr:
+            rxpath = []
+            db += 'hr'
+            url = f'{urllist[db]}/{year}/{doy}/'
+            for i,hh in enumerate(hhindd):
+                urla = url + hh + '/'
+                with urllib.request.urlopen(urla) as response:
+                    html = response.read().decode('ascii')
+                    soup = BeautifulSoup(html, 'html.parser')
+                    for link in soup.find_all('a'):
+                        if link.get('href') is not None and len(link.get('href')) == 16:
+                            rxpath.append(f'{hh}/')
+                            rxlist.append(link.get('href'))
+            rxlist = np.array(rxlist)
+            rxpath = np.array(rxpath)
+            rxnames = np.array([r[:4] for r in rxlist])
+            
+            if isinstance(rx, str):
+                irx = np.isin(rxnames, rx)
+                rxlist = rxlist[irx] if np.sum(irx) > 0 else None
+                rxpath = rxpath[irx] if np.sum(irx) > 0 else None
+        else:
+            url = f'{urllist[db]}/{year}/{doy}/{Y}d/'
+            with urllib.request.urlopen(url) as response:
+                html = response.read().decode('ascii')
+                soup = BeautifulSoup(html, 'html.parser')
+                for link in soup.find_all('a'):
+                    if link.get('href') is not None and len(link.get('href')) == 14:
+                        rxlist.append(link.get('href'))
+            rxlist = np.array(rxlist)
+            rxnames = np.array([r[:4] for r in rxlist])
+            if isinstance(rx, str):
+                irx = np.isin(rxnames, rx)
+                rxlist = rxlist[irx] if np.sum(irx) > 0 else None
         
         if rxlist is not None:
             print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-            for rx in rxlist:
-                path = f"{url}/{rx}{doy}0.{Y}d.Z"
-                print (path)
-                ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
+            for i, rx in enumerate(rxlist):
+                if hr:
+                    path = f"{url}/{rxpath[i]}/{rx}"
+                else:
+                    path = f"{url}/{rx}"
+                ofn = f"{odir}{rx}"    
                 download_request(urlpath=path, filename=ofn, force=force)
         else:
             print ('{} wasnt found'.format(rx))
