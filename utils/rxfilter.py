@@ -23,7 +23,7 @@ def getData(fn):
     rx = fn['data/rx'][:]
     lat = fn['data/table'][:,0]
     lon = fn['data/table'][:,1]
-    rxa = [str(l[0].decode('ascii')) for l in rx]
+    rxa = [str(l[0].decode('ascii')).lower() for l in rx]
     return lon, lat, array(rxa)
 
 def filterandsave(fn: str = None, ofn: str = None,
