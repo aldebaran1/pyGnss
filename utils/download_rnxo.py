@@ -50,8 +50,8 @@ def download_request(urlpath, filename, force=False):
     # Does the file already exists in the destination directory?
     flist = sorted(glob(path+'/*'))
     fnlist = np.array([os.path.splitext(f)[0] for f in flist])
-    
-    if not np.isin(filename, fnlist):
+    fnamelist = np.array([os.path.split(f)[-1][:4].lower() for f in fnlist])
+    if not np.isin(os.path.split(filename)[-1][:4].lower(), fnamelist):
         # Do you want to override it?
         print ('Downloading file: {}'.format(tail))
         try:
@@ -673,6 +673,9 @@ def getRinexObs(date,
         rpath = f'/OUTGOING/RINEX30/RING/{year}/{doy}/'
         ftp.cwd(rpath)
         rxlist = np.array(getStateList(year, doy, ftp, db, rxn=rx))
+        if isinstance(rx, str):
+            irx = np.isin(np.asarray(rxlist), rx)
+            rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
         for urlrx in rxlist:
             download_cddis(ftp, urlrx, odir+urlrx, force=force)
     else:
