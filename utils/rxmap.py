@@ -60,13 +60,13 @@ def plotMap(fn,lonlim=None,latlim=None, projection='stereo'):
             y1 = Y+2 if Y+2 < 90 else 90
             
             latlim = [round(y0), round(y1)]
-        ax = gm.plotCartoMap(latlim=latlim,lonlim=lonlim, projection=projection,
+        fig, ax = gm.plotCartoMap(latlim=latlim,lonlim=lonlim, projection=projection,
                         states=1, background_color='gray')
     else:
         print ('Wrong file format')
         return
     
-    plt.title(fname)
+    ax.set_title(fname)
     ax.scatter(lon,lat, marker='.', c='r', s=25, transform=ccrs.PlateCarree())
     print ('Total {} of receivers'.format(lat.size))
     plt.show()
