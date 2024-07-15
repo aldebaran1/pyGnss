@@ -35,7 +35,7 @@ def plotMap(fn,lonlim=None,latlim=None, projection='stereo'):
         lon, lat = getCoord(fn)
     elif os.path.splitext(fn)[1] in ('.yaml', '.yml'):
         root, fname = os.path.split(fn)
-        stream = yaml.load(open(fn, 'r'))
+        stream = yaml.load(open(fn, 'r'), Loader=yaml.SafeLoader())
         data = array(stream['rx'])
         lon = data[:, 1].astype(float16)
         lat = data[:, 2].astype(float16)
@@ -60,18 +60,15 @@ def plotMap(fn,lonlim=None,latlim=None, projection='stereo'):
             y1 = Y+2 if Y+2 < 90 else 90
             
             latlim = [round(y0), round(y1)]
-        gm.plotCartoMap(latlim=latlim,lonlim=lonlim, projection=projection,
+        ax = gm.plotCartoMap(latlim=latlim,lonlim=lonlim, projection=projection,
                         states=1, background_color='gray')
-        
     else:
         print ('Wrong file format')
         return
     
     plt.title(fname)
-    plt.scatter(lon,lat, marker='.', c='r', s=25, transform=ccrs.PlateCarree())
+    ax.scatter(lon,lat, marker='.', c='r', s=25, transform=ccrs.PlateCarree())
     print ('Total {} of receivers'.format(lat.size))
-#    for i in range(lon.shape[0]):
-#        plt.plot(lon[i],lat[i], '.r', ms=5, transform=ccrs.PlateCarree())
     plt.show()
     
 if __name__ == '__main__':
