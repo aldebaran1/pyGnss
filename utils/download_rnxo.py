@@ -699,7 +699,14 @@ if __name__ == '__main__':
     
     P = p.parse_args()
     if P.db == 'all':
-        a = ['cors', 'cddis', 'unavco', 'brasil', 'chain', 'chile']
+        a = ['cors', 'cddis', 'unavco', 'brasil', 'chain', 'chile', 'euref', 'ring']
+        for db in a:
+            getRinexObs(date = P.date, db = db, 
+                        odir = P.dir, rx = P.rx, dllist = P.dllist, 
+                        hr = P.highrate, force = P.force, fix = P.fixpath)
+            
+    elif P.db == 'highlat':
+        a = ['cors', 'cddis', 'unavco', 'euref']
         for db in a:
             getRinexObs(date = P.date, db = db, 
                         odir = P.dir, rx = P.rx, dllist = P.dllist, 
@@ -712,6 +719,12 @@ if __name__ == '__main__':
                         hr = P.highrate, force = P.force, fix = P.fixpath)
     elif P.db == 'south':
         a = ['cddis', 'unavco']
+        for db in a:
+            getRinexObs(date = P.date, db = db, 
+                        odir = P.dir, rx = P.rx, dllist = P.dllist, 
+                        hr = P.highrate, force = P.force, fix = P.fixpath)
+    elif P.db == 'europe':
+        a = ['euref', 'ring']
         for db in a:
             getRinexObs(date = P.date, db = db, 
                         odir = P.dir, rx = P.rx, dllist = P.dllist, 
