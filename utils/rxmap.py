@@ -82,6 +82,7 @@ if __name__ == '__main__':
     p.add_argument('-x', '--lonlim', type=float, nargs=2, default = None)
     p.add_argument('-y', '--latlim', type=float, nargs=2, default = None)
     p.add_argument('--proj', type=str, default = 'stereo')
+    p.add_argument('--save', action='store_true')
     
     P = p.parse_args()
-    plotMap(P.hdffile, P.lonlim, P.latlim, P.proj)
+    plotMap(P.hdffile, P.lonlim, P.latlim, P.proj, P.save)
