@@ -13,6 +13,8 @@ import cartopy.crs as ccrs
 from cartomap import geogmap as gm
 import os
 import yaml
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 
 def getCoord(fn):
     fn = h5py.File(fn, 'r')
