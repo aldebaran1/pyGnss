@@ -21,7 +21,7 @@ def getCoord(fn):
     
     return lon, lat
 
-def plotMap(fn,lonlim=None,latlim=None, projection='stereo'):
+def plotMap(fn,lonlim=None,latlim=None, projection='stereo', save = False):
     if os.path.splitext(fn)[1] in ('.h5', '.hdf5'):
         root, fname = os.path.split(fn)
         if latlim is None:
@@ -69,7 +69,10 @@ def plotMap(fn,lonlim=None,latlim=None, projection='stereo'):
     ax.set_title(fname)
     ax.scatter(lon,lat, marker='.', c='r', s=25, transform=ccrs.PlateCarree())
     print ('Total {} of receivers'.format(lat.size))
-    plt.show()
+    if save:
+        fig.savefig(fn + '.png', dpi=100)
+    else:
+        plt.show()
     
 if __name__ == '__main__':
     from argparse import ArgumentParser
