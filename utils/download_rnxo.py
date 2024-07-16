@@ -13,7 +13,7 @@ import numpy as np
 import yaml
 from glob import glob
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import subprocess
 import platform
 from dateutil import parser
@@ -31,7 +31,7 @@ token_path = os.getcwd() + os.sep
 
 hhindd = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23']
 
-def download_request(urlpath, filename, force=False):
+def download_request(urlpath, filename, force=False, hr=False):
     # Check is destination directory exists?
     path, tail = os.path.split(filename)
 
@@ -50,8 +50,13 @@ def download_request(urlpath, filename, force=False):
     # Does the file already exists in the destination directory?
     flist = sorted(glob(path+'/*'))
     fnlist = np.array([os.path.splitext(f)[0] for f in flist])
-    fnamelist = np.array([os.path.split(f)[-1][:4].lower() for f in fnlist])
-    if not np.isin(os.path.split(filename)[-1][:4].lower(), fnamelist):
+    if not hr:
+        fnamelist = np.array([os.path.split(f)[-1][:4].lower() for f in fnlist])
+        fn = os.path.split(filename)[-1][:4].lower()
+    else:
+        fn = filename
+        fnamelist = fnlist
+    if not np.isin(fn, fnamelist):
         # Do you want to override it?
         print ('Downloading file: {}'.format(tail))
         try:
@@ -444,7 +449,7 @@ def getRinexObs(date,
                 else:
                     path = f"{url}/{rx}"
                 ofn = f"{odir}{rx}"    
-                download_request(urlpath=path, filename=ofn, force=force)
+                download_request(urlpath=path, filename=ofn, force=force, hr=hr)
         else:
             print ('{} wasnt found'.format(rx))
     
@@ -493,7 +498,6 @@ def getRinexObs(date,
                         for data in r:
                             f.write(data)
                     f.close()
-                #download_request(urlpath=path, filename=ofn, force=force)
             else:
                 print ('{} wasnt found'.format(rx))
         else:
@@ -539,7 +543,9 @@ def getRinexObs(date,
 
     elif db == 'cors':
         url = f'{urllist[db]}/{year}/{doy}/'
-        
+        if hr:
+            print ("CORS does not support highrate data files")
+            return 
         rxlist = []
         with urllib.request.urlopen(url) as response:
             html = response.read().decode('ascii')
@@ -557,12 +563,14 @@ def getRinexObs(date,
             for rx in rxlist:
                 path = f"{url}/{rx}/{rx}{doy}0.{Y}d.gz"
                 ofn = f'{odir}{rx}{doy}0.{Y}d.gz'
-                download_request(urlpath=path, filename=ofn, force=force)
+                download_request(urlpath=path, filename=ofn, force=force, hr=hr)
         else:
             print ('{} wasnt found'.format(rx))
     
     elif db == 'chile':
-        
+        if hr:
+            print ("CORS does not support highrate data files")
+            return 
         url = f'{urllist[db]}/{year}/{doy}/'
         stations_url = f'{urllist[db]}/CSN_GNSS.info'
         
@@ -589,7 +597,7 @@ def getRinexObs(date,
             for rx in rxlist:
                 path = f"{url}/{rx}{doy}0.{Y}d.Z"
                 ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
-                download_request(urlpath=path, filename=ofn, force=force)
+                download_request(urlpath=path, filename=ofn, force=force, hr=hr)
         else:
             print ('{} wasnt found'.format(rx))
             
@@ -639,9 +647,12 @@ def getRinexObs(date,
                 ofn = f'{odir}/{rx}'
             else:
                 ofn = f'{odir}/{rx.split("/")[-1]}'
-            download_request(url+rx, ofn, force=force)
+            download_request(url+rx, ofn, force=force, hr=hr)
                 
     elif db == 'brasil':
+        if hr:
+            print ("CORS does not support highrate data files")
+            return 
         url = f'{urllist[db]}/{year}/{doy}/'
         rxlist = []
         r = requests.get(url)
@@ -662,11 +673,14 @@ def getRinexObs(date,
             for rx in rxlist:
                 path = f"{url}/{rx}{doy}1.zip"
                 ofn = f'{odir}{rx}{doy}1.zip'
-                download_request(urlpath=path, filename=ofn, force=force)
+                download_request(urlpath=path, filename=ofn, force=force, hr=hr)
         else:
             print ('{} wasnt found'.format(rx))
             
     elif db == 'ring':
+        if hr:
+            print ("CORS does not support highrate data files")
+            return 
         url = urllist[db]
         ftp = ftplib.FTP(url)
         ftp.login()
@@ -684,7 +698,7 @@ def getRinexObs(date,
 if __name__ == '__main__':
     from argparse import ArgumentParser
     p = ArgumentParser()
-    p.add_argument('date', help='2017-5-27, or 2017-251', type=str)
+    p.add_argument('date', help='2017-5-27, or 2017-251, or a comma-separed start,end dates', type=str)
     p.add_argument('db',type=str, help='database acronym. Supporting: cddis, \
                    cors, euref')
     p.add_argument('dir',type=str, help='destination directory')
@@ -701,39 +715,48 @@ if __name__ == '__main__':
                    action='store_true')
     
     P = p.parse_args()
-    if P.db == 'all':
-        a = ['cors', 'cddis', 'unavco', 'brasil', 'chain', 'chile', 'euref', 'ring']
-        for db in a:
-            getRinexObs(date = P.date, db = db, 
-                        odir = P.dir, rx = P.rx, dllist = P.dllist, 
-                        hr = P.highrate, force = P.force, fix = P.fixpath)
-            
-    elif P.db == 'highlat':
-        a = ['cors', 'cddis', 'unavco', 'euref']
-        for db in a:
-            getRinexObs(date = P.date, db = db, 
-                        odir = P.dir, rx = P.rx, dllist = P.dllist, 
-                        hr = P.highrate, force = P.force, fix = P.fixpath)
-    elif P.db == 'conus':
-        a = ['cors', 'unavco', 'cddis']
-        for db in a:
-            getRinexObs(date = P.date, db = db, 
-                        odir = P.dir, rx = P.rx, dllist = P.dllist, 
-                        hr = P.highrate, force = P.force, fix = P.fixpath)
-    elif P.db == 'south':
-        a = ['cddis', 'unavco']
-        for db in a:
-            getRinexObs(date = P.date, db = db, 
-                        odir = P.dir, rx = P.rx, dllist = P.dllist, 
-                        hr = P.highrate, force = P.force, fix = P.fixpath)
-    elif P.db == 'europe':
-        a = ['euref', 'ring']
-        for db in a:
-            getRinexObs(date = P.date, db = db, 
-                        odir = P.dir, rx = P.rx, dllist = P.dllist, 
-                        hr = P.highrate, force = P.force, fix = P.fixpath)
+    dates = P.date.split(',')
+    if len(dates) < 1:
+        raise("the date is a required argument")
+    elif len(dates) == 2:
+        dtdates = np.arange(parser.parse(dates[0]),parser.parse(dates[1])+timedelta(hours=1), timedelta(days=1)).astype('datetime64[s]').astype(datetime)
+        dates = [t.strftime("%Y-%m-%d") for t in dtdates]
     else:
-        getRinexObs(date = P.date, db = P.db, odir = P.dir, 
-                    rx = P.rx, dllist = P.dllist, hr = P.highrate, 
-                    force = P.force, fix = P.fixpath)
+        raise("Can't compile the dates")
+    for d in dates:
+        if P.db == 'all':
+            a = ['cors', 'cddis', 'unavco', 'brasil', 'chain', 'chile', 'euref', 'ring']
+            for db in a:
+                getRinexObs(date = d, db = db, 
+                            odir = P.dir, rx = P.rx, dllist = P.dllist, 
+                            hr = P.highrate, force = P.force, fix = P.fixpath)
+                
+        elif P.db == 'highlat':
+            a = ['cors', 'cddis', 'unavco', 'euref']
+            for db in a:
+                getRinexObs(date = d, db = db, 
+                            odir = P.dir, rx = P.rx, dllist = P.dllist, 
+                            hr = P.highrate, force = P.force, fix = P.fixpath)
+        elif P.db == 'conus':
+            a = ['cors', 'unavco', 'cddis']
+            for db in a:
+                getRinexObs(date = d, db = db, 
+                            odir = P.dir, rx = P.rx, dllist = P.dllist, 
+                            hr = P.highrate, force = P.force, fix = P.fixpath)
+        elif P.db == 'south':
+            a = ['cddis', 'unavco']
+            for db in a:
+                getRinexObs(date = d, db = db, 
+                            odir = P.dir, rx = P.rx, dllist = P.dllist, 
+                            hr = P.highrate, force = P.force, fix = P.fixpath)
+        elif P.db == 'europe':
+            a = ['euref', 'ring']
+            for db in a:
+                getRinexObs(date = d, db = db, 
+                            odir = P.dir, rx = P.rx, dllist = P.dllist, 
+                            hr = P.highrate, force = P.force, fix = P.fixpath)
+        else:
+            getRinexObs(date = d, db = P.db, odir = P.dir, 
+                        rx = P.rx, dllist = P.dllist, hr = P.highrate, 
+                        force = P.force, fix = P.fixpath)
             
