@@ -404,10 +404,10 @@ def getIonosphericPiercingPoints(rx_xyz, sv, obstimes, ipp_alt, navfn,
         rec_alt = rx_xyz[2]
         rx_xyz = geodetic2ecef(lat = rx_xyz[0], lon = rx_xyz[1], alt = rec_alt)
     
-    if sv[0] == 'G':
-        if navfn.endswith('n'):
+    if sv[0] in ('G', 'E'):
+        if navfn.lower().endswith('n'):
             xyz = gpsSatPosition(navfn, obstimes, sv=sv, rx_position=rx_xyz, coords='xyz')
-        elif navfn.endswith('sp3'):
+        elif navfn.lower().endswith('sp3'):
             xyz = gpsSatPositionSP3(navfn, obstimes, sv=sv, rx_position=rx_xyz, coords='xyz')
         az,el,r = ecef2aer(xyz[0,:],xyz[1,:],xyz[2,:],rec_lat, rec_lon, rec_alt)
         aer_vector = np.array([az, el, r])
@@ -437,7 +437,7 @@ def getIonosphericPiercingPoints(rx_xyz, sv, obstimes, ipp_alt, navfn,
         r_new = ipp_alt / fm
         lla_vector = np.array(aer2geodetic(aer_vector[0], aer_vector[1], r_new, rec_lat, rec_lon, rec_alt))
     else:
-        print ('Type in valid sattype initial. "G" for GPS and "R" for GLONASS')
+        print ('Type in valid sattype initial. "G" for GPS, "R" for GLONASS, and "E" for Galileo')
         
     if (cs == 'wsg84'):
         return lla_vector
@@ -1194,6 +1194,7 @@ def getDCBfromSTEC(y, aer, el_mask=30, H=350, ts=30, decimate=False,
     if SNR is not None:
         idnan = np.logical_or(idnan, SNR < SNRc)
     stec = np.copy(y)
+    print (f'{np.nansum(idnan)} / {np.nansum(np.isfinite(stec))}')
     stec[idnan] = np.nan
     
     stec = stec[::tskip, :]
@@ -1202,7 +1203,7 @@ def getDCBfromSTEC(y, aer, el_mask=30, H=350, ts=30, decimate=False,
         F[:, isv] = getMappingFunction(aer[::tskip,isv,1], h=H)
     # LEAST sQUARES FIT
     if x0 is None:
-        x0 = np.empty(stec.shape[1]) 
+        x0 = np.zeros(stec.shape[1]) 
     sb_lsq = least_squares(_fun, x0, args=(stec, F), loss='soft_l1')
     
     if return_mapping_f:
@@ -1289,9 +1290,12 @@ def getCNR(D, fsp3=None, el_mask=30, H=350, key='S1'):
     time = D.time.values
     try:
         CNO = D[key].values
-
-        if fsp3 is not None:
-            assert os.path.exists(fsp3)
+    except:
+        CNO = None
+    
+    if (fsp3 is not None) and (CNO is not None):
+        assert os.path.exists(fsp3)
+        try:
             dt = np.array([np.datetime64(ttt) for ttt in time]).astype('datetime64[s]').astype(datetime)
             for isv, sv in enumerate(D.sv.values):
                 aer = getIonosphericPiercingPoints(D.position, sv, dt, 
@@ -1299,8 +1303,8 @@ def getCNR(D, fsp3=None, el_mask=30, H=350, key='S1'):
                                                   cs='aer', rx_xyz_coords='xyz')
                 idel = (aer[1] < el_mask)
                 CNO[idel, isv] = np.nan
-    except:
-        CNO = None
+        except:
+            pass
     return CNO
 
 def getDTEC(fnc, fsp3, el_mask=30, maxjump=1.6, maxgap=1, eps=1, tsps=30):
