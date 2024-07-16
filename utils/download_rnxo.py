@@ -717,12 +717,14 @@ if __name__ == '__main__':
     P = p.parse_args()
     dates = P.date.split(',')
     if len(dates) < 1:
-        raise("the date is a required argument")
+        print("the date is a required argument")
+        exit()
     elif len(dates) == 2:
         dtdates = np.arange(parser.parse(dates[0]),parser.parse(dates[1])+timedelta(hours=1), timedelta(days=1)).astype('datetime64[s]').astype(datetime)
         dates = [t.strftime("%Y-%m-%d") for t in dtdates]
-    else:
-        raise("Can't compile the dates")
+    elif len(dates) > 2:
+        print("Can't compile the dates")
+        exit()
     for d in dates:
         if P.db == 'all':
             a = ['cors', 'cddis', 'unavco', 'brasil', 'chain', 'chile', 'euref', 'ring']
