@@ -33,7 +33,7 @@ def writeRxlist2HDF(obsfolder='/media/smrak/Eclipse2017/Eclipse/cors/all/233/',
     it will auto make one for you.
     """
     rxlist = array(getRxList(obsfolder, sufix))
-    rxnames = array([os.path.split(r)[1][:4] for r in rxlist])
+    rxnames = array([os.path.split(r)[1][:4].lower() for r in rxlist])
     _, idx = unique(rxnames, return_index=1)
     rxlist = rxlist[idx]
     if listfilename is None:
