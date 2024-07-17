@@ -17,13 +17,15 @@ from pyGnss import gnssUtils as uf
 from pyGnss import scintillation
 from glob import glob
 from scipy.optimize import least_squares
+import re
 
 #constnats for GPS
 f1 = 1575420000
 f2 = 1227600000
 f5 = 1176450000
+e8 = 1191795000
 c0 = 299792458
-freq = {'1': f1, '2': f2, '5': f5}
+freq = {'1': f1, '2': f2, '5': f5, '8': e8}
 
 def getSatBias(fn, sv=None):
     import os
@@ -123,7 +125,7 @@ def getPhaseCorrTEC(L1, L2, P1, P2, tec_err=False, channel=2,
     at this place.    
     """
     #
-    global f1, f2, f5
+    global f1, f2, f5, e8
     #Get intervals between nans and/or cycle slips    
     idx, ranges = getIntervals(L1, L2, P1, P2, maxgap=maxgap, maxjump=maxjump)
 #    print ('Intervals between cycle slips ', ranges)
@@ -137,6 +139,8 @@ def getPhaseCorrTEC(L1, L2, P1, P2, tec_err=False, channel=2,
                     F2 = f2
                 elif channel == 5:
                     F2 = f5
+                elif channel == 8:
+                    F2 = e8
                 range_tec = ((F1**2 * F2**2) / (F1**2 - F2**2)) * (P2[r[0] : r[1]] - 
                                           P1[r[0] : r[1]]) /40.3 / pow(10, 16)
                 phase_tec = ((F1**2 * F2**2) / (F1**2 - F2**2)) * (c0/40.3) * \
@@ -287,28 +291,33 @@ def AmplitudeScintillationIndex(data, N):
 def gpsSatPositionSP3(fsp3, dt, sv=None, rx_position=None, coords='xyz'):
     assert sv is not None
     # Read in data
-    D = gr.load(fsp3).sel(sv=sv)
     if isinstance(dt, datetime):
         dt = [dt]
     if isinstance(dt, list):
         dt = np.asarray(dt)
-    dt = dt.astype('datetime64[s]')
-    navtimes = D.time.values.astype('datetime64[s]')
-    CSx = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,0])
-    CSy = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,1])
-    CSz = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,2])
-    ecefxi = CSx(dt.astype(int))*1e3
-    ecefyi = CSy(dt.astype(int))*1e3
-    ecefzi = CSz(dt.astype(int))*1e3
-    
-    if coords == 'xyz':
-        return np.array([ecefxi, ecefyi, ecefzi])
+    svlist = gr.load(fsp3).sv.values
+    if sv in svlist:
+        D = gr.load(fsp3).sel(sv=sv)
+        
+        dt = dt.astype('datetime64[s]')
+        navtimes = D.time.values.astype('datetime64[s]')
+        CSx = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,0])
+        CSy = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,1])
+        CSz = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,2])
+        ecefxi = CSx(dt.astype(int))*1e3
+        ecefyi = CSy(dt.astype(int))*1e3
+        ecefzi = CSz(dt.astype(int))*1e3
+        
+        if coords == 'xyz':
+            return np.array([ecefxi, ecefyi, ecefzi])
+        else:
+            h0 = rx_position[2] if rx_position[2] > 0 else 0
+            AER = ecef2aer(x=ecefxi, y=ecefyi, z=ecefzi,
+                           lon0=rx_position[1], lat0=rx_position[0], h0=h0)
+            return np.array(AER)
     else:
-        h0 = rx_position[2] if rx_position[2] > 0 else 0
-        AER = ecef2aer(x=ecefxi, y=ecefyi, z=ecefzi,
-                       lon0=rx_position[1], lat0=rx_position[0], h0=h0)
-        return np.array(AER)
-
+        return np.nan * np.zeros((3, dt.size))
+    
 def gpsSatPosition(fnav, dt, sv=None, rx_position=None, coords='xyz'):
     navdata = gr.load(fnav).sel(sv=sv)
     timesarray = np.asarray(dt,dtype='datetime64[ns]') #[datetime64 [ns]]
@@ -1098,9 +1107,43 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                 AER[idel, isv, 2] = aer[2][idel]
         else:
             idel = np.ones(D.time.values.size, dtype=bool)
-        stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
-                                         P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv],
+        
+        if int(D.version) == 2:
+            if sv[0] == 'G':
+                stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
+                                         P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv], channel=2,
                                          maxgap=maxgap, maxjump=maxjump)
+            elif sv[0] == 'E':
+                stec[idel, isv] = getPhaseCorrTEC(L1=D.L8.values[idel,isv], L2=D.L8.values[idel,isv],
+                                         P1=D.C8.values[idel,isv], P2=D.C8.values[idel,isv], channel=8,
+                                         maxgap=maxgap, maxjump=maxjump)
+            else:
+                print (f"Constallation {sv[0]} not yet supported")
+        elif int(D.version) == 3:
+            if sv[0] == 'G':
+                stec[idel, isv] = getPhaseCorrTEC(L1=D['L1C'].values[idel,isv], L2=D['L2W'].values[idel,isv],
+                                         P1=D['C1C'].values[idel,isv], P2=D['C2W'].values[idel,isv], channel=2,
+                                         maxgap=maxgap, maxjump=maxjump)
+            elif sv[0] == 'E':
+                E_signals = np.array(list(D.variables)[1:-1]) # Remove 'time' and 'sv' from variables
+                E1_signals = E_signals[np.array(list(map(lambda x: bool(re.match(r'C1[A-Z]', x)), E_signals)))]
+                E8_signals = E_signals[np.array(list(map(lambda x: bool(re.match(r'C8[A-Z]', x)), E_signals)))]
+                count = []
+                for ie, e in enumerate(E1_signals):
+                    count.append(np.sum(np.isfinite(D[E1_signals[ie]].values)))
+                e1X = E1_signals[np.array(count).argmax()][-1]
+                count = []
+                for ie, e in enumerate(E8_signals):
+                    count.append(np.sum(np.isfinite(D[E8_signals[ie]].values)))
+                e8X = E8_signals[np.array(count).argmax()][-1]
+                
+                stec[idel, isv] = getPhaseCorrTEC(L1=D[f'L1{e1X}'].values[idel,isv], L2=D[f'L8{e8X}'].values[idel,isv],
+                                         P1=D[f'C1{e1X}'].values[idel,isv], P2=D[f'C8{e8X}'].values[idel,isv],channel=8,
+                                         maxgap=maxgap, maxjump=maxjump)
+            else:
+                print (f"Constallation {sv[0]} not yet supported")
+        else:
+            print (f"Rinex version {D.version} is not supported!")
     if return_aer:
         return stec, AER
     else:
