@@ -13,6 +13,8 @@ import cartopy.crs as ccrs
 from cartomap import geogmap as gm
 import os
 import yaml
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 
 def getCoord(fn):
     fn = h5py.File(fn, 'r')
@@ -21,7 +23,7 @@ def getCoord(fn):
     
     return lon, lat
 
-def plotMap(fn,lonlim=None,latlim=None):
+def plotMap(fn,lonlim=None,latlim=None, projection='stereo', save = False):
     if os.path.splitext(fn)[1] in ('.h5', '.hdf5'):
         root, fname = os.path.split(fn)
         if latlim is None:
@@ -35,7 +37,7 @@ def plotMap(fn,lonlim=None,latlim=None):
         lon, lat = getCoord(fn)
     elif os.path.splitext(fn)[1] in ('.yaml', '.yml'):
         root, fname = os.path.split(fn)
-        stream = yaml.load(open(fn, 'r'))
+        stream = yaml.safe_load(open(fn, 'r'))
         data = array(stream['rx'])
         lon = data[:, 1].astype(float16)
         lat = data[:, 2].astype(float16)
@@ -60,18 +62,19 @@ def plotMap(fn,lonlim=None,latlim=None):
             y1 = Y+2 if Y+2 < 90 else 90
             
             latlim = [round(y0), round(y1)]
-        gm.plotCartoMap(latlim=latlim,lonlim=lonlim, projection='merc')
-        
+        fig, ax = gm.plotCartoMap(latlim=latlim,lonlim=lonlim, projection=projection,
+                        states=1, background_color='gray')
     else:
         print ('Wrong file format')
         return
     
-    plt.title(fname)
-    plt.scatter(lon,lat, marker='.', c='r', s=25, transform=ccrs.PlateCarree())
+    ax.set_title(fname)
+    ax.scatter(lon,lat, marker='.', c='r', s=25, transform=ccrs.PlateCarree())
     print ('Total {} of receivers'.format(lat.size))
-#    for i in range(lon.shape[0]):
-#        plt.plot(lon[i],lat[i], '.r', ms=5, transform=ccrs.PlateCarree())
-    plt.show()
+    if save:
+        fig.savefig(fn + '.png', dpi=100)
+    else:
+        plt.show()
     
 if __name__ == '__main__':
     from argparse import ArgumentParser
@@ -80,6 +83,8 @@ if __name__ == '__main__':
     p.add_argument('hdffile',type=str)
     p.add_argument('-x', '--lonlim', type=float, nargs=2, default = None)
     p.add_argument('-y', '--latlim', type=float, nargs=2, default = None)
+    p.add_argument('--proj', type=str, default = 'stereo')
+    p.add_argument('--save', action='store_true')
     
     P = p.parse_args()
-    plotMap(P.hdffile, P.lonlim, P.latlim)
+    plotMap(P.hdffile, P.lonlim, P.latlim, P.proj, P.save)

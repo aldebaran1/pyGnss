@@ -23,7 +23,7 @@ def getData(fn):
     rx = fn['data/rx'][:]
     lat = fn['data/table'][:,0]
     lon = fn['data/table'][:,1]
-    rxa = [str(l[0].decode('ascii')) for l in rx]
+    rxa = [str(l[0].decode('ascii')).lower() for l in rx]
     return lon, lat, array(rxa)
 
 def filterandsave(fn: str = None, ofn: str = None,
@@ -37,8 +37,9 @@ def filterandsave(fn: str = None, ofn: str = None,
         lonlim = [-180, 180]
     latlim = array(latlim).astype(float)
     lonlim = array(lonlim).astype(float)
-
-    assert ofn is not None
+    
+    if ofn is None:
+        ofn = os.path.split(fn)[0] + os.sep
     if os.path.isdir(ofn):
         ofn = os.path.join(os.path.splitext(ofn)[0], os.path.split(fn)[1]) +  '.yaml'
     if os.path.splitext(ofn)[1] != 'yaml':
@@ -91,11 +92,11 @@ if __name__ == '__main__':
     from argparse import ArgumentParser
     p = ArgumentParser()
     p.add_argument('rxlist', type = str, help = 'Input data (hdf5)')
-    p.add_argument('ofn', type = str, help = 'Name and destination of the output file')
+    p.add_argument('--ofn', type = str, help = 'Ndestination folder or output file')
     p.add_argument('--lonlim', help = 'Longitude limits', nargs = 2, default=None)
     p.add_argument('--latlim', help = 'Latitude limits', nargs = 2, default=None)
-    p.add_argument('--density', type = int, help='Reduce number to rx# per resolution')
-    p.add_argument('-r', '--resolution', type = int, help='Grid resolution to reduce the rx#', default=1)
+    p.add_argument('--density', type = int, help='Reduce number to rx# per resolution, default=None')
+    p.add_argument('-r', '--resolution', type = int, help='Grid resolution to reduce the rx#. Default=1', default=1)
     P = p.parse_args()
     
     filterandsave(fn = P.rxlist, ofn = P.ofn, latlim=P.latlim, lonlim=P.lonlim,
