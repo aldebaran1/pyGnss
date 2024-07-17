@@ -10,7 +10,7 @@ import yaml
 import os
 import glob
 import georinex as grx
-from numpy import nan, zeros
+from numpy import nan, zeros, array, unique
 from pymap3d import ecef2geodetic
 
 def getRxList(folder, sufix):
@@ -32,7 +32,10 @@ def writeRxlist2HDF(obsfolder='/media/smrak/Eclipse2017/Eclipse/cors/all/233/',
     information. Itshould contain path/to/file.h5, if you forget .h5 extension,
     it will auto make one for you.
     """
-    rxlist = getRxList(obsfolder, sufix)
+    rxlist = array(getRxList(obsfolder, sufix))
+    rxnames = array([os.path.split(r)[1][:4] for r in rxlist])
+    _, idx = unique(rxnames, return_index=1)
+    rxlist = rxlist[idx]
     if listfilename is None:
         listfilename = obsfolder
     assert len(rxlist) > 0
