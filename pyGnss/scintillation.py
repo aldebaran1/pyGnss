@@ -10,17 +10,6 @@ from pyGnss import gnssUtils as gu
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
 
-def getROTI(tec, length):
-    """
-    Sebastijan Mrak
-    getROTI returns the rate of TEC Index calculated as the standard deviation 
-    of the provided TEC on the moving window of the length 'length'. It returns 
-    the ROTI as a numpy array data type.
-    """
-    rot = np.hstack((np.nan, np.diff(tec)))
-    roti = sigmaTEC(rot, length)
-    return roti
-    
 
 def phaseScintillationIndex(data, N):
     """

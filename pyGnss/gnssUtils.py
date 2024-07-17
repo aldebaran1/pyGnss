@@ -85,32 +85,11 @@ def hpf(y, fc=0.1, order=5, fs=1,plot=False, group_delay=False, verbatim=False):
     Sebastijan Mrak
     Filter the input data 'y' with desired HP filter.  
     """
-    b, a = butter_hpf(fc, fs, order)
-    y_filt = signal.lfilter(b, a, y)
-    w, h = signal.freqz(b, a, worN=1000)
-    gd = -np.diff(np.unwrap(np.angle(h)))/np.diff(w)
-    if verbatim: print ('Group delay of the filter is '+ str(gd[-1])+' samples.')
-    if plot:
-        plt.figure()
-        plt.semilogx(w, 20*np.log10(np.abs(h)))
-        plt.ylim([-60,5])
-        plt.title('Magnitude-normalized Butterworth filter frequency response')
-        plt.xlabel('Frequency [Hz]')
-        plt.ylabel('Amplitude [dB]')
-        plt.grid(which='both', axis='both')
-        ################################################
-    
-        plt.figure()
-        plt.semilogx(w[1:], gd)
-        plt.title('LPF group delay')
-        plt.xlabel('Frequency [Hz]')
-        plt.ylabel('Group delay [samples]')
-        plt.margins(0, 0.1)
-        plt.grid(which='both', axis='both')
-    if group_delay:
-        return y_filt, gd[-1]
-    else:
-        return y_filt
+    # b, a = butter_hpf(fc, fs, order, )
+    sos = signal.butter(order, fc, fs=fs, btype='high', output='sos')
+    y_filt = signal.sosfiltfilt(sos, y)
+
+    return y_filt
 
 def lpf(y, fc=0.1, order=5, fs=1, plot=False, group_delay=False, verbatim=False):
     b, a = butter_lpf(fc, fs, order)

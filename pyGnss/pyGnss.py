@@ -273,6 +273,45 @@ def AmplitudeScintillationIndex(data, N):
             y[i] = np.std(data[i-int(N/2) : i+int(N/2)] / np.mean(data[i-int(N/2):i+int(N/2)]))
     return y
 
+def sigmaTEC(x, N):
+    idx = np.isnan(x)
+    n2 = int(N/2)
+    iterate = np.arange(n2, x.size-n2)
+    y = np.nan * np.copy(x)
+    for i in iterate:
+        if np.sum(np.isfinite(x[i-n2:i+n2])) > N/4:
+            y[i] = np.nanstd(x[i-n2:i+n2])
+    y[idx] = np.nan
+    return y
+
+def getROTI(sTEC: np.ndarray, ts: float = 1, N: int = 10):
+    """Compute ROTI from input slantTEC 2D array [times,satellites]
+
+    Parameters
+    ----------
+    sTEC : np.ndarray
+        2D Array of SlantTEC used to comopute ROTI; [Ntimes x Nsatellites]
+    ts : float, int
+        Sampling period; 
+    N: int
+        length of sliding window in number of samples
+
+    Returns
+    -------
+    ROTI: np.ndarray
+        ROTI in the same file structure and shape as sTEC
+    """
+    # N = 60*length/ts # length of the ROTI sliding window normalized to sampling period ts
+    
+    ROT = np.nan * np.copy(sTEC)
+    ROTI = np.nan * np.copy(sTEC)
+    for isv in range(sTEC.shape[1]):
+        ROT[1:,isv] = np.diff(sTEC[:,isv]) / ts # per second
+        for j in range(int(N/2), ROT.shape[0]-int(N/2)):
+            ROTI[j,isv] = np.nanstd(ROT[j-int(N/2):j+int(N/2),isv]) * 60 # to TECu/min
+            
+    return ROTI
+
 def gpsSatPositionSP3(fsp3, dt, sv=None, rx_position=None, coords='xyz'):
     assert sv is not None
     # Read in data
@@ -1078,11 +1117,6 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
         stec[idel, isv] = getPhaseCorrTEC(L1=D[L1].values[::tskip][idel,isv], L2=D[L2].values[::tskip][idel,isv],
                                      P1=D[P1].values[::tskip][idel,isv], P2=D[P2].values[::tskip][idel,isv],
                                      maxgap=maxgap, maxjump=maxjump)
-#        penalty = np.nan * np.copy(stec)
-#        for i in range(stec.shape[1]):
-#            penalty[:,i] = scintillation.sigmaTEC(stec[:,i], 30)
-#        penalty = np.nansum(penalty**2, axis=1)
-#        idp = (penalty < 1)
         if jplg_file is not None:
             sb[isv] = getSatBias(jplg_file, sv)
         if return_mapping_function:
