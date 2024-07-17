@@ -1112,7 +1112,10 @@ def getVTEC(fnc, fsp3, dcb=None, jplg_file=None, el_mask=30, H=350,
 #        assert os.path.exists(jplg_file)
         dcb = getDCB(fnc, fsp3, jplg_file=jplg_file, el_mask=30, H=350,
                  tskip=None, maxgap=1, maxjump=1.6)
-    D = gr.load(fnc)
+    if isinstance(fnc, str):
+        D = gr.load(fnc)
+    elif isinstance(fnc, xarray.Dataset):
+        D = fnc
     assert dcb.size == D.sv.size
     dt = np.array([np.datetime64(ttt) for ttt in D.time.values])
     vtec = np.nan * np.zeros((dt.size, D.sv.size))
@@ -1201,7 +1204,10 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
         vtec = (stec - p) * F
         ret = np.nansum(np.nanstd(vtec, axis=1)**2)
         return ret
-    D = gr.load(fnc)
+    if isinstance(fnc, str):
+        D = gr.load(fnc)
+    elif isinstance(fnc, xarray.Dataset):
+        D = fnc
     dt0 = np.array([np.datetime64(ttt) for ttt in D.time.values])
     if tskip is None:
         target = 60

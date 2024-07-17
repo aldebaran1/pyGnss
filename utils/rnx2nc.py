@@ -17,7 +17,7 @@ from datetime import datetime
 def _convert(file, odir, i, tlim=None, fast=True, 
              use = 'G', override=False):
     try:
-        gr.load(file, out = odir, useindicators = i,
+        gr.load(file, out = odir, useindicators = i, interval=30,
                 fast = fast, tlim=tlim, use = use, overwrite = override)
     except Exception as e:
         print (e)
