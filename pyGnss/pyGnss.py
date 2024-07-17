@@ -17,13 +17,15 @@ from pyGnss import gnssUtils as uf
 from pyGnss import scintillation
 from glob import glob
 from scipy.optimize import least_squares
+import re
 
 #constnats for GPS
 f1 = 1575420000
 f2 = 1227600000
 f5 = 1176450000
+e8 = 1191795000
 c0 = 299792458
-freq = {'1': f1, '2': f2, '5': f5}
+freq = {'1': f1, '2': f2, '5': f5, '8': e8}
 
 def getSatBias(fn, sv=None):
     import os
@@ -123,7 +125,7 @@ def getPhaseCorrTEC(L1, L2, P1, P2, tec_err=False, channel=2,
     at this place.    
     """
     #
-    global f1, f2, f5
+    global f1, f2, f5, e8
     #Get intervals between nans and/or cycle slips    
     idx, ranges = getIntervals(L1, L2, P1, P2, maxgap=maxgap, maxjump=maxjump)
 #    print ('Intervals between cycle slips ', ranges)
@@ -137,6 +139,8 @@ def getPhaseCorrTEC(L1, L2, P1, P2, tec_err=False, channel=2,
                     F2 = f2
                 elif channel == 5:
                     F2 = f5
+                elif channel == 8:
+                    F2 = e8
                 range_tec = ((F1**2 * F2**2) / (F1**2 - F2**2)) * (P2[r[0] : r[1]] - 
                                           P1[r[0] : r[1]]) /40.3 / pow(10, 16)
                 phase_tec = ((F1**2 * F2**2) / (F1**2 - F2**2)) * (c0/40.3) * \
@@ -248,21 +252,6 @@ def retreiveDTECfromPhase(L, f=f1, units='cycle'):
         raise ('Enter an appropriate name for units')
     return dTEC * -1
 
-#%% Indexes
-# def getROTI(tec, length):
-#     """
-#     Sebastijan Mrak
-#     getROTI returns the rate of TEC Index calculated as the standard deviation 
-#     of the provided TEC on the moving window of the length 'length'. It returns 
-#     the ROTI as a numpy array data type.
-#     """
-#     roti = []    
-#     for i in range(len(tec)-length):
-#         roti.append(np.std(tec[i:i+length]))
-    
-#     return np.array(roti)
-    
-
 def phaseScintillationIndex(data, N):
     """
     Sebastijan Mrak
@@ -287,28 +276,33 @@ def AmplitudeScintillationIndex(data, N):
 def gpsSatPositionSP3(fsp3, dt, sv=None, rx_position=None, coords='xyz'):
     assert sv is not None
     # Read in data
-    D = gr.load(fsp3).sel(sv=sv)
     if isinstance(dt, datetime):
         dt = [dt]
     if isinstance(dt, list):
         dt = np.asarray(dt)
-    dt = dt.astype('datetime64[s]')
-    navtimes = D.time.values.astype('datetime64[s]')
-    CSx = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,0])
-    CSy = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,1])
-    CSz = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,2])
-    ecefxi = CSx(dt.astype(int))*1e3
-    ecefyi = CSy(dt.astype(int))*1e3
-    ecefzi = CSz(dt.astype(int))*1e3
-    
-    if coords == 'xyz':
-        return np.array([ecefxi, ecefyi, ecefzi])
+    svlist = gr.load(fsp3).sv.values
+    if sv in svlist:
+        D = gr.load(fsp3).sel(sv=sv)
+        
+        dt = dt.astype('datetime64[s]')
+        navtimes = D.time.values.astype('datetime64[s]')
+        CSx = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,0])
+        CSy = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,1])
+        CSz = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,2])
+        ecefxi = CSx(dt.astype(int))*1e3
+        ecefyi = CSy(dt.astype(int))*1e3
+        ecefzi = CSz(dt.astype(int))*1e3
+        
+        if coords == 'xyz':
+            return np.array([ecefxi, ecefyi, ecefzi])
+        else:
+            h0 = rx_position[2] if rx_position[2] > 0 else 0
+            AER = ecef2aer(x=ecefxi, y=ecefyi, z=ecefzi,
+                           lon0=rx_position[1], lat0=rx_position[0], h0=h0)
+            return np.array(AER)
     else:
-        h0 = rx_position[2] if rx_position[2] > 0 else 0
-        AER = ecef2aer(x=ecefxi, y=ecefyi, z=ecefzi,
-                       lon0=rx_position[1], lat0=rx_position[0], h0=h0)
-        return np.array(AER)
-
+        return np.nan * np.zeros((3, dt.size))
+    
 def gpsSatPosition(fnav, dt, sv=None, rx_position=None, coords='xyz'):
     navdata = gr.load(fnav).sel(sv=sv)
     timesarray = np.asarray(dt,dtype='datetime64[ns]') #[datetime64 [ns]]
@@ -368,17 +362,6 @@ def gpsSatPosition(fnav, dt, sv=None, rx_position=None, coords='xyz'):
         rec_lat, rec_lon, rec_alt = ecef2geodetic(rx_position[0], rx_position[1], rx_position[2])
         A,E,R = ecef2aer(X, Y, Z, rec_lat, rec_lon, rec_alt)
         return np.array([A,E,R])
-
-#%% Sat positioning 
-#    
-#def aer2ipp(aer, rxp, H=350):
-#    H*=1e3
-#    aer_new = np.copy(aer)
-#    fm = np.sin(np.radians(aer[:,:,1]))
-#    aer_new[:,:,2] = (H / fm)
-#    ipp = np.array(aer2geodetic(aer_new[:,:,0], aer_new[:,:,1], aer_new[:,:,2], 
-#                                rxp[0], rxp[1], rxp[2]))
-#    return ipp
 
 def getIonosphericPiercingPoints(rx_xyz, sv, obstimes, ipp_alt, navfn,
                                  cs='wsg84', rx_xyz_coords='xyz', el0=0):
@@ -528,199 +511,6 @@ def gloSatPosition(navfn, sv, obstimes, rx_position=None, cs='xyz'):
     else:
         return
     
-# %%
-#def getSatXYZ(nav, sv, times):
-#    """
-#    Greg Starr
-#    getSatelliteXYZ returns the satellite XYZ as a tuple at the inputted times
-#    inputs are rinex navigation data, satellite number, and list of times
-#    Output: tuple of satellite position in ECEF coordinates (X,Y,Z)
-#    Algorithm: Based on http://web.ics.purdue.edu/~ecalais/teaching/geodesy/EAS_591T_2003_lab_4.htm
-#    also based on Bill Rideout's tec.py
-#    """
-#    allSvInfo = nav[nav['sv']==sv] 
-#    
-#    timesarray = np.asarray(times,dtype='datetime64[ms]')
-#    navtimes = np.asarray(allSvInfo.index,dtype='datetime64[ms]')
-#    bestephind = np.array([np.argmin(abs(navtimes-t)) for t in timesarray])
-#    info = np.asarray(allSvInfo)[bestephind]
-#    info = DataFrame(info,index=times,columns=allSvInfo.columns)
-#    info['sv'] = sv
-#    info['gpstime'] = np.array([getGpsTime(t) for t in times])
-#    
-#    # constants
-#    GM = 3986005.0E8 # universal gravational constant
-#    OeDOT = 7.2921151467E-5
-#    
-#    #Basic Parameters
-#    t = info['gpstime']-info['TimeEph']
-#    mu = info['M0']+t*(np.sqrt(GM/info['sqrtA']**6)+info['DeltaN'])
-#    Ek = solveIter(mu,info['Eccentricity'])  
-#    Vk = np.asarray(np.arctan2(np.sqrt(1.0-info['Eccentricity']**2)*np.sin(Ek),
-#                               np.cos(Ek)-info['Eccentricity']),float)
-#    PhiK = Vk + info['omega']
-#    #Correct for orbital perturbations
-#    omega = np.asarray(info['omega']+info['Cus']*np.sin(2.0*PhiK)
-#             +info['Cuc']*np.cos(2.0*PhiK),float)
-#    r = np.asarray((info['sqrtA']**2)*(1.0-info['Eccentricity']*np.cos(Ek))
-#         +info['Crs']*np.sin(2.0*PhiK)+info['Crc']*np.cos(2.0*PhiK),float)
-#    i = np.asarray(info['Io']+info['IDOT']*t+info['CIS']*np.sin(2.0*PhiK)
-#         +info['Cic']*np.cos(2.0*PhiK),float)
-#    
-#    #Compute the right ascension
-#    Omega = np.asarray(info['OMEGA']+(info['OMEGA DOT']-OeDOT)*t-
-#        (OeDOT*info['TimeEph']),float)
-#    #Convert satellite position from orbital frame to ECEF frame
-#    cosOmega = np.cos(Omega)
-#    sinOmega = np.sin(Omega)
-#    cosomega = np.cos(omega)
-#    sinomega = np.sin(omega)
-#    cosi = np.cos(i)
-#    sini = np.sin(i)
-#    cosVk = np.cos(Vk)
-#    sinVk = np.sin(Vk)
-#    R11 = cosOmega*cosomega - sinOmega*sinomega*cosi
-#    R12 = -1.0*cosOmega*sinomega - sinOmega*cosomega*cosi
-#    #R13 = np.sin(Omega)*np.sin(i)
-#    R21 = sinOmega*cosomega + cosOmega*sinomega*cosi
-#    R22 = -1.0*sinOmega*sinomega + cosOmega*cosomega*cosi
-#    #R23 = -1.0*np.cos(Omega)*np.sin(i)
-#    R31 = sinomega*sini
-#    R32 = cosomega*sini
-#    #R33 = np.cos(i)
-#          
-#    xyz = np.zeros((len(times),3))
-#    rv = np.column_stack((r*cosVk,r*sinVk,np.zeros(r.shape)))
-#    
-#    R = np.empty((rv.shape[0],3,3))
-#    R[:,0,0] = R11
-#    R[:,0,1] = R12
-#    R[:,0,2] = 0
-#    R[:,1,0] = R21
-#    R[:,1,1] = R22
-#    R[:,1,2] = 0
-#    R[:,2,0] = R31
-#    R[:,2,1] = R32
-#    R[:,2,2] = 0
-#    
-#
-#    for i in range(len(times)): #THIS IS THE SLOWEST PART NOW
-#        xyz[i,:] = (R[i,:,:].dot(rv[i,:]))
-#        
-#    return xyz
-# %% GeoRinex NAV file access and processing
-#def getSatXYZ2(info, times):
-#    """
-#    Greg Starr
-#    getSatelliteXYZ returns the satellite XYZ as a tuple at the inputted times
-#    inputs are rinex navigation data, satellite number, and list of times
-#    Output: tuple of satellite position in ECEF coordinates (X,Y,Z)
-#    Algorithm: Based on http://web.ics.purdue.edu/~ecalais/teaching/geodesy/EAS_591T_2003_lab_4.htm
-#    also based on Bill Rideout's tec.py
-#    
-#    Update:
-#    nav == xarray from georinex = gr.load(brdc.**n)
-#    """    
-#    # Input argument: 'times' [datetime.datetime]
-#    timesarray = np.asarray(times,dtype='datetime64[ns]') #[datetime64 [ns]]
-#    # Manipulate with times, epochs and crap like this
-#    navtimes = info.time.values # [datetime64 [ns]]
-#    idnan = np.isfinite(info['Toe'].values)
-#    bestephind = np.array([np.argmin(abs(navtimes[idnan]-t)) for t in timesarray])
-#    gpstime = np.array([getGpsTime(t) for t in times])
-#    t = gpstime - info['Toe'][idnan][bestephind].values # [datetime.datetime]
-#    # constants
-#    GM = 3986005.0E8 # universal gravational constant
-#    OeDOT = 7.2921151467E-5
-#    ##################3 REPLACEMENT ###########################################
-#    # Basic parameters
-#    ecc = info['Eccentricity'][idnan][bestephind].values # Eccentricity
-#    mu = info['M0'][idnan][bestephind].values + \
-#             t *(np.sqrt(GM / info['sqrtA'][idnan][bestephind].values**6) + 
-#             info['DeltaN'][idnan][bestephind].values)
-#    Ek = solveIter(mu,ecc)
-#    Vk = np.asarray(np.arctan2(np.sqrt(1.0 - ecc**2) * np.sin(Ek),
-#                               np.cos(Ek) - ecc), float)
-#    PhiK = Vk + info['omega'][idnan][bestephind].values
-#    
-#    #Correct for orbital perturbations
-#    omega = np.asarray(info['omega'][idnan][bestephind].values + 
-#                       info['Cus'][idnan][bestephind].values * np.sin(2.0*PhiK) + 
-#                       info['Cuc'][idnan][bestephind].values * np.cos(2.0*PhiK), float)
-#    r = np.asarray((info['sqrtA'][idnan][bestephind].values**2) * 
-#                   (1.0 - ecc * np.cos(Ek)) + info['Crs'][idnan][bestephind].values * 
-#                   np.sin(2.0*PhiK) + info['Crc'][idnan][bestephind].values * 
-#                   np.cos(2.0*PhiK), float)
-#    i = np.asarray(info['Io'][idnan][bestephind].values + 
-#                   info['IDOT'][idnan][bestephind].values * t + 
-#                   info['Cis'][idnan][bestephind].values * np.sin(2.0*PhiK) + 
-#                   info['Cic'][idnan][bestephind].values * np.cos(2.0*PhiK), float)
-#    
-#    #Compute the right ascension
-#    Omega = np.asarray(info['Omega0'][idnan][bestephind].values + 
-#                       (info['OmegaDot'][idnan][bestephind].values - OeDOT) * t -
-#                       (OeDOT * info['Toe'][idnan][bestephind].values), float)
-#    ###########################################################################
-#    #Convert satellite position from orbital frame to ECEF frame
-#    cosOmega = np.cos(Omega)
-#    sinOmega = np.sin(Omega)
-#    cosomega = np.cos(omega)
-#    sinomega = np.sin(omega)
-#    cosi = np.cos(i)
-#    sini = np.sin(i)
-#    cosVk = np.cos(Vk)
-#    sinVk = np.sin(Vk)
-#    R11 = cosOmega*cosomega - sinOmega*sinomega*cosi
-#    R12 = -1.0*cosOmega*sinomega - sinOmega*cosomega*cosi
-#    #R13 = np.sin(Omega)*np.sin(i)
-#    R21 = sinOmega*cosomega + cosOmega*sinomega*cosi
-#    R22 = -1.0*sinOmega*sinomega + cosOmega*cosomega*cosi
-#    #R23 = -1.0*np.cos(Omega)*np.sin(i)
-#    R31 = sinomega*sini
-#    R32 = cosomega*sini
-#    #R33 = np.cos(i)
-#          
-#    xyz = np.zeros((len(times),3))
-#    rv = np.column_stack((r*cosVk,r*sinVk,np.zeros(r.shape)))
-#    
-#    R = np.empty((rv.shape[0],3,3))
-#    R[:,0,0] = R11
-#    R[:,0,1] = R12
-#    R[:,0,2] = 0
-#    R[:,1,0] = R21
-#    R[:,1,1] = R22
-#    R[:,1,2] = 0
-#    R[:,2,0] = R31
-#    R[:,2,1] = R32
-#    R[:,2,2] = 0
-#    
-#
-#    for i in range(len(times)): #THIS IS THE SLOWEST PART NOW
-#        xyz[i,:] = (R[i,:,:].dot(rv[i,:]))
-#        
-#    return xyz
-#%% Phase scintillation
-#def phaseDetrend(y, order,polynom=False):
-#    """
-#    Sebastijan Mrak
-#    Raw phase data detrending using N-th polinom approximation function.
-#    Detrended output is input data subtracted with polinom approximation.
-#    Output is of the same length as input data 'y'. 
-#    """
-#    x = np.arange(y.shape[0])
-#    mask = np.isnan(y)
-#    z = np.polyfit(x[~mask], y[~mask], order)
-#    z = np.polyfit(x, y, order)
-#    f = np.poly1d(z)
-#    polyfit = f(x)
-#    y_d = y-polyfit
-#    
-#    if polynom:
-#        return y_d, polyfit
-#    else:
-#        return y_d
-
-
 def phaseScintillation(data, fc=0.1, filt_order=6, polyfit_order=3, fs=1, skip=20):
     """
     Sebastijan Mrak
@@ -1098,9 +888,43 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                 AER[idel, isv, 2] = aer[2][idel]
         else:
             idel = np.ones(D.time.values.size, dtype=bool)
-        stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
-                                         P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv],
+        
+        if int(D.version) == 2:
+            if sv[0] == 'G':
+                stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
+                                         P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv], channel=2,
                                          maxgap=maxgap, maxjump=maxjump)
+            elif sv[0] == 'E':
+                stec[idel, isv] = getPhaseCorrTEC(L1=D.L8.values[idel,isv], L2=D.L8.values[idel,isv],
+                                         P1=D.C8.values[idel,isv], P2=D.C8.values[idel,isv], channel=8,
+                                         maxgap=maxgap, maxjump=maxjump)
+            else:
+                print (f"Constallation {sv[0]} not yet supported")
+        elif int(D.version) == 3:
+            if sv[0] == 'G':
+                stec[idel, isv] = getPhaseCorrTEC(L1=D['L1C'].values[idel,isv], L2=D['L2W'].values[idel,isv],
+                                         P1=D['C1C'].values[idel,isv], P2=D['C2W'].values[idel,isv], channel=2,
+                                         maxgap=maxgap, maxjump=maxjump)
+            elif sv[0] == 'E':
+                E_signals = np.array(list(D.variables)[1:-1]) # Remove 'time' and 'sv' from variables
+                E1_signals = E_signals[np.array(list(map(lambda x: bool(re.match(r'C1[A-Z]', x)), E_signals)))]
+                E8_signals = E_signals[np.array(list(map(lambda x: bool(re.match(r'C8[A-Z]', x)), E_signals)))]
+                count = []
+                for ie, e in enumerate(E1_signals):
+                    count.append(np.sum(np.isfinite(D[E1_signals[ie]].values)))
+                e1X = E1_signals[np.array(count).argmax()][-1]
+                count = []
+                for ie, e in enumerate(E8_signals):
+                    count.append(np.sum(np.isfinite(D[E8_signals[ie]].values)))
+                e8X = E8_signals[np.array(count).argmax()][-1]
+                
+                stec[idel, isv] = getPhaseCorrTEC(L1=D[f'L1{e1X}'].values[idel,isv], L2=D[f'L8{e8X}'].values[idel,isv],
+                                         P1=D[f'C1{e1X}'].values[idel,isv], P2=D[f'C8{e8X}'].values[idel,isv],channel=8,
+                                         maxgap=maxgap, maxjump=maxjump)
+            else:
+                print (f"Constallation {sv[0]} not yet supported")
+        else:
+            print (f"Rinex version {D.version} is not supported!")
     if return_aer:
         return stec, AER
     else:
