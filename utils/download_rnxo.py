@@ -24,9 +24,12 @@ from earthscope_sdk.auth.auth_flow import NoTokensError
 from pathlib import Path
 import ssl
 import string
+import warnings
 
 ssl._create_default_https_context = ssl._create_unverified_context
 #Change to your preference
+
+warnings.filterwarnings("ignore")
 
 token_path = os.path.expanduser("~") + '/pyGnss/utils/'
 
@@ -301,7 +304,7 @@ def getRinexObs(date,
                'chainhr': 'http://chain.physics.unb.ca/data/gps/data/highrate/',
                'euref': 'https://epncb.oma.be/pub/RINEX/',
                'eurefhr': 'https://igs.bkg.bund.de/root_ftp/EUREF/highrate/',
-               'chile': 'http://gps.csn.uchile.cl/data/',
+               'chile': 'https://gps.csn.uchile.cl/data/',
                'brasil': 'https://geoftp.ibge.gov.br/informacoes_sobre_posicionamento_geodesico/rbmc/dados/',
                'unavco': 'https://data.unavco.org/archive/gnss/rinex/obs/',
                'unavcohr': 'https://data.unavco.org/archive/gnss/highrate/1-Hz/rinex/',
@@ -569,38 +572,41 @@ def getRinexObs(date,
             print ('{} wasnt found'.format(rx))
     
     elif db == 'chile':
-        if hr:
-            print ("CORS does not support highrate data files")
-            return 
         url = f'{urllist[db]}/{year}/{doy}/'
         stations_url = f'{urllist[db]}/CSN_GNSS.info'
+        print (url)
+        header = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+        # req = urllib.request.Request(stations_url, headers=header)
+        # A = requests.get(url, timeout=60, headers=header)
+        # A.raise_for_status()
+        print (soup)
+        return
+        # with urllib.request.urlopen(req, timeout=60) as response:
+        #     html = response.read().decode('ascii').split('\n')
+        #     rxlist = []
+        #     for i,l in enumerate(html):
+        #         if i < 2:
+        #             continue
+        #         try:
+        #             rxn = l[:4]
+        #             if len(rxn) == 4:
+        #                 rxlist.append(rxn.lower())
+        #         except:
+        #             pass
+        #         del rxn
+        # rxlist = np.unique(np.asarray(rxlist))
+        # if isinstance(rx, str):
+        #     irx = np.isin(rxlist, rx)
+        #     rxlist = rxlist[irx] if np.sum(irx) > 0 else None
         
-        with urllib.request.urlopen(stations_url) as response:
-            html = response.read().decode('ascii').split('\n')
-            rxlist = []
-            for i,l in enumerate(html):
-                if i < 2:
-                    continue
-                try:
-                    rxn = l[:4]
-                    if len(rxn) == 4:
-                        rxlist.append(rxn.lower())
-                except:
-                    pass
-                del rxn
-        rxlist = np.unique(np.asarray(rxlist))
-        if isinstance(rx, str):
-            irx = np.isin(rxlist, rx)
-            rxlist = rxlist[irx] if np.sum(irx) > 0 else None
-        
-        if rxlist is not None:
-            print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
-            for rx in rxlist:
-                path = f"{url}/{rx}{doy}0.{Y}d.Z"
-                ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
-                download_request(urlpath=path, filename=ofn, force=force, hr=hr)
-        else:
-            print ('{} wasnt found'.format(rx))
+        # if rxlist is not None:
+        #     print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+        #     for rx in rxlist:
+        #         path = f"{url}/{rx}{doy}0.{Y}d.Z"
+        #         ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
+        #         download_request(urlpath=path, filename=ofn, force=force, hr=hr)
+        # else:
+        #     print ('{} wasnt found'.format(rx))
             
     elif db == 'euref':
         if hr:
