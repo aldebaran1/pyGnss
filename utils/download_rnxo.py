@@ -32,6 +32,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 warnings.filterwarnings("ignore")
 
 token_path = os.path.expanduser("~") + '/pyGnss/utils/'
+token_path= os.getcwd() + os.sep
 
 hhindd = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23']
 
@@ -487,7 +488,12 @@ def getRinexObs(date,
             
             if rxlist is not None:
                 print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+                flist = sorted(glob(odir+os.sep+'*'))
+                fnames = np.array([os.path.split(f)[1][:4] for f in flist])
                 for rx in rxlist:
+                    if np.isin(rx, fnames) and (not force):
+                        print ('{} already exists'.format(rx))
+                        continue
                     path = f"{url}/{rx}/{rx}{doy}0.{Y}d.Z"
                     ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
                     if not os.path.exists(odir):
@@ -523,7 +529,12 @@ def getRinexObs(date,
             
             if rxlist is not None:
                 print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+                flist = sorted(glob(odir+os.sep+'*'))
+                fnames = np.array([os.path.split(f)[1][:4] for f in flist])
                 for rx in rxlist:
+                    if np.isin(rx, fnames) and (not force):
+                        print ('{} already exists'.format(rx))
+                        continue
                     if hr:
                         path = f"{url}/{rx}/{rx}{doy}0.{Y}d.Z"
                         ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
