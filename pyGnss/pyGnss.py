@@ -17,6 +17,7 @@ from pyGnss import gnssUtils as uf
 from pyGnss import scintillation
 from glob import glob
 from scipy.optimize import least_squares
+from scipy.signal import savgol_filter
 import re
 
 #constnats for GPS
@@ -128,7 +129,6 @@ def getPhaseCorrTEC(L1, L2, P1, P2, tec_err=False, channel=2,
     global f1, f2, f5, e8
     #Get intervals between nans and/or cycle slips    
     idx, ranges = getIntervals(L1, L2, P1, P2, maxgap=maxgap, maxjump=maxjump)
-#    print ('Intervals between cycle slips ', ranges)
     ERR = np.nan * np.zeros(len(L1))
     TEC = np.nan * np.zeros(len(L1))
     for r in ranges:
@@ -501,8 +501,6 @@ def aer2ipp(az, el, rxp, H=350):
     
     lon = np.radians(lon0) + np.arcsin(np.sin(psi) * np.sin(np.radians(az)) / np.cos(lat))
     
-    # ipp = np.vstack((np.degrees(lat), np.degrees(lon)))
-    # print (az.shape, R.shape, psi.shape, lat.shape, lon.shape)
     return np.degrees(lat), np.degrees(lon)
 
 
@@ -897,7 +895,7 @@ def getAER(times, rxp, fsp3, svlist = None, el_mask=None, H = 350):
     return AER
     
 def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
-            return_aer = False ):
+            return_aer = False):
     if isinstance(fnc, xarray.Dataset):
         D = fnc
     else:
@@ -930,9 +928,16 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
         
         if int(D.version) == 2:
             if sv[0] == 'G':
-                stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
-                                         P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv], channel=2,
-                                         maxgap=maxgap, maxjump=maxjump)
+                if 'C1' in list(D.variables):
+                    stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
+                                             P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv], channel=2,
+                                             maxgap=maxgap, maxjump=maxjump)
+                elif 'P1' in list(D.variables):
+                    stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
+                                             P1=D.P1.values[idel,isv], P2=D.P2.values[idel,isv], channel=2,
+                                             maxgap=maxgap, maxjump=maxjump)
+                else:
+                    stec[idel, isv] = np.nan * np.arange(np.nansum(idel))
             elif sv[0] == 'E':
                 stec[idel, isv] = getPhaseCorrTEC(L1=D.L8.values[idel,isv], L2=D.L8.values[idel,isv],
                                          P1=D.C8.values[idel,isv], P2=D.C8.values[idel,isv], channel=8,
@@ -1057,7 +1062,6 @@ def getDCBfromSTEC(y, aer, el_mask=30, H=350, ts=30, decimate=False,
     if SNR is not None:
         idnan = np.logical_or(idnan, SNR < SNRc)
     stec = np.copy(y)
-    print (f'{np.nansum(idnan)} / {np.nansum(np.isfinite(stec))}')
     stec[idnan] = np.nan
     
     stec = stec[::tskip, :]
@@ -1145,11 +1149,13 @@ def getCNR(D, fsp3=None, el_mask=30, H=350, key='S1'):
     if isinstance(D, str):
         D = gr.load(D)
     
+    if int(D.version) == 3 and len(key) == 2:
+        key += 'C'
     time = D.time.values
     try:
         CNO = D[key].values
     except:
-        CNO = None
+        CNO = np.nan * np.ones((D.time.size, D.sv.values.size))
     
     if (fsp3 is not None) and (CNO is not None):
         assert os.path.exists(fsp3)
@@ -1182,29 +1188,23 @@ def getDTEC(fnc, fsp3, el_mask=30, maxjump=1.6, maxgap=1, eps=1, tsps=30):
     
     return dtec
 
-def getDTECra(fnc, fsp3, el_mask=30, maxjump=1.6, maxgap=1, N=40):
+def getDTECsg_from_VTEC(vtec, N=40, order=1):
     
-    vtec, aer = getVTEC(fnc, fsp3, return_aer=True)
     dtec = np.nan * np.copy(vtec)
     
-    el_mask0 = (el_mask - 20) if (el_mask - 20) > 5 else 5
-    
     for i in range(vtec.shape[1]):
-        idel0 = aer[:, i, 1] <= el_mask0
-        vtec[idel0, i] = np.nan
-        dtec[:,i] = uf.detrend_running_mean(vtec[:,i], N=N)
-        idel = aer[:, i, 1] < el_mask
-        dtec[idel, i] = np.nan
+        dtec[:, i] = vtec[:,i] - savgol_filter(vtec[:,i], N, order, mode='constant', cval=np.nan)
     
     return dtec
 
-def getDTEC2(vtec, maxgap=1, maxjump=1, eps=1, tsps=30):
+
+def getDTEC2(vtec, maxgap=1, maxjump=1, eps=1, tsps=30, polynom_list=None):
     
     dtec = np.nan * np.copy(vtec)
     
     for i in range(vtec.shape[1]):
         idx, intervals = getIntervalsTEC(vtec[:, i], maxgap=maxgap, maxjump=maxjump)
-        dtec[:,i] = tecdPerLOS(vtec[:, i], intervals, eps=eps, tsps=tsps)
+        dtec[:,i] = tecdPerLOS(vtec[:, i], intervals, eps=eps, tsps=tsps, polynom_list=polynom_list)
     
     return dtec
 
