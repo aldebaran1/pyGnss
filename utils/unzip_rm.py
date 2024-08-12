@@ -45,7 +45,7 @@ def unzipfolder(folder, timeout=5, delete=True):
         flist = sorted(glob.glob(filestr))
         c = 1
         for file in flist:
-            print('Unizipping: {}/{}: {}'.format(c,len(flist)+1, file))
+            print('Unizipping: {}/{}: {}'.format(c,len(flist), file))
             unzip(file, timeout, delete=delete)
             c+=1
     if delete:
