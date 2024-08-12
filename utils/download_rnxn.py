@@ -106,13 +106,15 @@ def getRinexNav(date:str = None,
     parent_dir = ftps.pwd()
     rpath = f'gnss/data/daily/{year}/brdc/'
     ftps.cwd(rpath)
-    target = f'BRDC00IGS_R_{year}{doy}0000_01D_MN.rnx.gz'
+    target = np.array([f'brdc{doy}0.{Y}z', f'BRDC00IGS_R_{year}{doy}0000_01D_MN.rnx.gz'])
     d = []
     ftps.retrlines('LIST', d.append)
     dta = np.array([dd.split()[-1] for dd in d])
     isin = np.isin(dta, target)
     if np.sum(isin) > 0:
         for f in dta[isin]:
+            if not os.path.exists(odir):
+                subprocess.call(f'mkdir -p "{odir}"', shell=True)
             print (f"Downloading: {rpath}{f}")
             ftps.retrbinary("RETR " + f, open(f'{odir}{f}', 'wb').write)
             unzip_rm(f'{odir}{f}')
@@ -128,6 +130,8 @@ def getRinexNav(date:str = None,
     isin = np.isin(dta, target)
     if np.sum(isin) > 0:
         for f in dta[isin]:
+            if not os.path.exists(odir):
+                subprocess.call(f'mkdir -p "{odir}"', shell=True)
             print (f"Downloading: {rpath}{f}")
             ftps.retrbinary("RETR " + f, open(f'{odir}{f}', 'wb').write)
             unzip_rm(f'{odir}{f}')
@@ -143,20 +147,18 @@ def getRinexNav(date:str = None,
     
     print (f'Downloading {urlnav}')
     with urllib.request.urlopen(urlnav, timeout=60) as response, open(navfile, 'wb') as out_file:
+        if not os.path.exists(odir):
+            subprocess.call(f'mkdir -p "{odir}"', shell=True)
         data = response.read() # a `bytes` object
         out_file.write(data)
     unzip_rm(navfile)
     print (f'Downloading {urlsp3}')
     with urllib.request.urlopen(urlsp3, timeout=60) as response, open(sp3file, 'wb') as out_file:
+        if not os.path.exists(odir):
+            subprocess.call(f'mkdir -p "{odir}"', shell=True)
         data = response.read() # a `bytes` object
         out_file.write(data)
     unzip_rm(sp3file)
-    
-    # print (f'Downloading Rapid Orbits {urlsp3_r3}')
-    # with urllib.request.urlopen(urlsp3_r3, timeout=60) as response, open(sp3file_r3, 'wb') as out_file:
-    #     data = response.read() # a `bytes` object
-    #     out_file.write(data)
-    # unzip_rm(sp3file_r3)
     
     return
 
