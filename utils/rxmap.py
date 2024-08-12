@@ -24,10 +24,10 @@ def getCoord(fn):
     return lon, lat
 
 def plotMap(fn,lonlim=None,latlim=None, projection='stereo', save = False):
+    root, fname = os.path.split(fn)
     if os.path.splitext(fn)[1] in ('.h5', '.hdf5'):
         lon, lat = getCoord(fn)
     elif os.path.splitext(fn)[1] in ('.yaml', '.yml'):
-        root, fname = os.path.split(fn)
         stream = yaml.safe_load(open(fn, 'r'))
         data = array(stream['rx'])
         lon = data[:, 1].astype(float16)
