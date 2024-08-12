@@ -136,10 +136,10 @@ def getRinexNav(date:str = None,
     # Use HTTPS acces
     urlnav = f"{url}/{year}/{doy}/brdc{doy}0.{Y}n.gz"
     urlsp3 = f"{url}/{year}/{doy}/igs{wwwwd}.sp3.gz"
-    urlsp3_r3 = f'{url}/{year}/{doy}/IGS0OPSRAP_{dt.strftime("%Y%j")}0000_01D_15M_ORB.SP3.gz'
+    # urlsp3_r3 = f'{url}/{year}/{doy}/IGS0OPSRAP_{dt.strftime("%Y%j")}0000_01D_15M_ORB.SP3.gz'
     navfile = f'{odir}brdc{doy}0.{Y}n.gz'
     sp3file = f'{odir}igs{doy}0.{Y}sp3.gz'
-    sp3file_r3 = f'{odir}IGS0OPSRAP_{dt.strftime("%Y%j")}0000_01D_15M_ORB.SP3.gz'
+    # sp3file_r3 = f'{odir}IGS0OPSRAP_{dt.strftime("%Y%j")}0000_01D_15M_ORB.SP3.gz'
     
     print (f'Downloading {urlnav}')
     with urllib.request.urlopen(urlnav, timeout=60) as response, open(navfile, 'wb') as out_file:
@@ -152,11 +152,11 @@ def getRinexNav(date:str = None,
         out_file.write(data)
     unzip_rm(sp3file)
     
-    print (f'Downloading Rapid Orbits {urlsp3_r3}')
-    with urllib.request.urlopen(urlsp3_r3, timeout=60) as response, open(sp3file_r3, 'wb') as out_file:
-        data = response.read() # a `bytes` object
-        out_file.write(data)
-    unzip_rm(sp3file_r3)
+    # print (f'Downloading Rapid Orbits {urlsp3_r3}')
+    # with urllib.request.urlopen(urlsp3_r3, timeout=60) as response, open(sp3file_r3, 'wb') as out_file:
+    #     data = response.read() # a `bytes` object
+    #     out_file.write(data)
+    # unzip_rm(sp3file_r3)
     
     return
 
