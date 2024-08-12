@@ -673,7 +673,7 @@ def getRinexObs(date,
             return 
         url = f'{urllist[db]}/{year}/{doy}/'
         rxlist = []
-        r = requests.get(url)
+        r = requests.get(url, verify=False)
         if r.status_code == requests.codes.ok:
             for data in r:
                 soup = BeautifulSoup(data.decode('ascii', 'ignore'), 'html.parser')
