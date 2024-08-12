@@ -52,7 +52,7 @@ def download(F, rx, filename):
 def unzip_rm(f, timeout=5):
     # UNZIP
     with gzip.open(f, 'rb') as f_in:
-        with open(f[:-3], 'wb') as f_out:
+        with open(os.path.splitext(f)[0], 'wb') as f_out:
             shutil.copyfileobj(f_in, f_out)
     if platform.system() == 'Linux':
         subprocess.call('rm -r {}'.format(f), shell=True, timeout=timeout)
@@ -118,7 +118,7 @@ def getRinexNav(date:str = None,
             print (f"Downloading: {rpath}{f}")
             ftps.retrbinary("RETR " + f, open(f'{odir}{f}', 'wb').write)
             try:
-                unzip(f'{odir}{f}')
+                unzip_rm(f'{odir}{f}')
             except:
                 pass
     
@@ -138,7 +138,7 @@ def getRinexNav(date:str = None,
             print (f"Downloading: {rpath}{f}")
             ftps.retrbinary("RETR " + f, open(f'{odir}{f}', 'wb').write)
             try:
-                unzip(f'{odir}{f}')
+                unzip_rm(f'{odir}{f}')
             except:
                 pass
     
@@ -157,14 +157,14 @@ def getRinexNav(date:str = None,
             subprocess.call(f'mkdir -p "{odir}"', shell=True)
         data = response.read() # a `bytes` object
         out_file.write(data)
-    unzip(navfile)
+    unzip_rm(navfile)
     print (f'Downloading {urlsp3}')
     with urllib.request.urlopen(urlsp3, timeout=60) as response, open(sp3file, 'wb') as out_file:
         if not os.path.exists(odir):
             subprocess.call(f'mkdir -p "{odir}"', shell=True)
         data = response.read() # a `bytes` object
         out_file.write(data)
-    unzip(sp3file)
+    unzip_rm(sp3file)
     try:
         print (f'Downloading {urlsp3_r3}')
         with urllib.request.urlopen(urlsp3_r3, timeout=60) as response, open(sp3file_r3, 'wb') as out_file:
@@ -172,7 +172,7 @@ def getRinexNav(date:str = None,
                 subprocess.call(f'mkdir -p "{odir}"', shell=True)
             data = response.read() # a `bytes` object
             out_file.write(data)
-        unzip(sp3file_r3)
+        unzip_rm(sp3file_r3)
     except:
         pass
     return
