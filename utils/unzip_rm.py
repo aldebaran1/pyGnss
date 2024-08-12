@@ -16,16 +16,16 @@ def unzip(f, timeout=5, delete=True):
     if platform.system() in ('Linux', 'Darwin'):
         if os.path.splitext(f)[1] == '.zip':
             key = 'unzip'
-            flags = '-o -q -d {head}'
+            flags = '-o -q -d {head} "{f}" && rm "{f}"'
             
         else:
             key = 'gzip'
-            flags = '-d -f -q'
+            flags = '-d -f -q {f}'
         try:
             if delete:
-                subprocess.call(f'{key} {flags} "{f}"', shell=True,timeout=timeout)
+                subprocess.call(f'{key} {flags}', shell=True,timeout=timeout)
             else:
-                subprocess.call(f'{key} {flags} "{f}"' + f, shell=True,timeout=timeout)
+                subprocess.call(f'{key} {flags}' + f, shell=True,timeout=timeout)
         except:
             print ('Problems with: ',tail)
     elif platform.system() == 'Windows':
