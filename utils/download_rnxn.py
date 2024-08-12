@@ -165,13 +165,16 @@ def getRinexNav(date:str = None,
         data = response.read() # a `bytes` object
         out_file.write(data)
     unzip_rm(sp3file)
-    print (f'Downloading {urlsp3_r3}')
-    with urllib.request.urlopen(urlsp3_r3, timeout=60) as response, open(sp3file_r3, 'wb') as out_file:
-        if not os.path.exists(odir):
-            subprocess.call(f'mkdir -p "{odir}"', shell=True)
-        data = response.read() # a `bytes` object
-        out_file.write(data)
-    unzip_rm(sp3file_r3)
+    try:
+        print (f'Downloading {urlsp3_r3}')
+        with urllib.request.urlopen(urlsp3_r3, timeout=60) as response, open(sp3file_r3, 'wb') as out_file:
+            if not os.path.exists(odir):
+                subprocess.call(f'mkdir -p "{odir}"', shell=True)
+            data = response.read() # a `bytes` object
+            out_file.write(data)
+        unzip_rm(sp3file_r3)
+    except:
+        pass
     return
 
 if __name__ == '__main__':
