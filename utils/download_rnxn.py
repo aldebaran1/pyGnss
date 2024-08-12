@@ -126,7 +126,7 @@ def getRinexNav(date:str = None,
     ftps.cwd(parent_dir)
     rpath = f'gnss/products/{wwww}/'
     ftps.cwd(rpath)
-    target = f'GFZ0MGXRAP_{year}{doy}0000_01D_05M_ORB.SP3.gz'
+    target = np.array([f'gfz{wwwwd}.sp3.Z', f'GFZ0MGXRAP_{year}{doy}0000_01D_05M_ORB.SP3.gz'])
     d = []
     ftps.retrlines('LIST', d.append)
     dta = np.array([dd.split()[-1] for dd in d])
