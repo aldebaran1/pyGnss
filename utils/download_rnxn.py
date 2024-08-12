@@ -117,7 +117,10 @@ def getRinexNav(date:str = None,
                 subprocess.call(f'mkdir -p "{odir}"', shell=True)
             print (f"Downloading: {rpath}{f}")
             ftps.retrbinary("RETR " + f, open(f'{odir}{f}', 'wb').write)
-            unzip_rm(f'{odir}{f}')
+            try:
+                unzip_rm(f'{odir}{f}')
+            except:
+                pass
     
     # Rinex3 Mixed Orbits in SP3 format
     ftps.cwd(parent_dir)
@@ -134,7 +137,10 @@ def getRinexNav(date:str = None,
                 subprocess.call(f'mkdir -p "{odir}"', shell=True)
             print (f"Downloading: {rpath}{f}")
             ftps.retrbinary("RETR " + f, open(f'{odir}{f}', 'wb').write)
-            unzip_rm(f'{odir}{f}')
+            try:
+                unzip_rm(f'{odir}{f}')
+            except:
+                pass
     
 
     # Use HTTPS acces
