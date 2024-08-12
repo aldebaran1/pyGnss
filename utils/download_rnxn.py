@@ -146,10 +146,10 @@ def getRinexNav(date:str = None,
     # Use HTTPS acces
     urlnav = f"{url}/{year}/{doy}/brdc{doy}0.{Y}n.gz"
     urlsp3 = f"{url}/{year}/{doy}/igs{wwwwd}.sp3.gz"
-    # urlsp3_r3 = f'{url}/{year}/{doy}/IGS0OPSRAP_{dt.strftime("%Y%j")}0000_01D_15M_ORB.SP3.gz'
+    urlsp3_r3 = f'{url}/{year}/{doy}/IGS0OPSRAP_{dt.strftime("%Y%j")}0000_01D_15M_ORB.SP3.gz'
     navfile = f'{odir}brdc{doy}0.{Y}n.gz'
     sp3file = f'{odir}igs{doy}0.{Y}sp3.gz'
-    # sp3file_r3 = f'{odir}IGS0OPSRAP_{dt.strftime("%Y%j")}0000_01D_15M_ORB.SP3.gz'
+    sp3file_r3 = f'{odir}IGS0OPSRAP_{dt.strftime("%Y%j")}0000_01D_15M_ORB.SP3.gz'
     
     print (f'Downloading {urlnav}')
     with urllib.request.urlopen(urlnav, timeout=60) as response, open(navfile, 'wb') as out_file:
@@ -165,7 +165,13 @@ def getRinexNav(date:str = None,
         data = response.read() # a `bytes` object
         out_file.write(data)
     unzip_rm(sp3file)
-    
+    print (f'Downloading {urlsp3_r3}')
+    with urllib.request.urlopen(urlsp3_r3, timeout=60) as response, open(sp3file_r3, 'wb') as out_file:
+        if not os.path.exists(odir):
+            subprocess.call(f'mkdir -p "{odir}"', shell=True)
+        data = response.read() # a `bytes` object
+        out_file.write(data)
+    unzip_rm(sp3file_r3)
     return
 
 if __name__ == '__main__':
