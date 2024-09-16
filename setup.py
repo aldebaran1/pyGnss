@@ -11,5 +11,6 @@ setup(name='pyGnss',
       description='GNSS processing tools for TEC, scintillation etc.',
       author='Sebastijan Mrak',
       url='https://github.com/aldebaran1/pyGnss',
+      install_requires=['hatanaka'],
 	  )
 
