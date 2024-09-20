@@ -8,7 +8,7 @@ Created on Thu Feb  8 12:09:46 2018
 
 import matplotlib.pyplot as plt
 import h5py
-from numpy import array, float16, nanmin, nanmax
+from numpy import array, float16, nanmin, nanmax, nanmedian
 import cartopy.crs as ccrs
 from cartomap import geogmap as gm
 import os
@@ -23,7 +23,7 @@ def getCoord(fn):
     
     return lon, lat
 
-def plotMap(fn,lonlim=None,latlim=None, projection='stereo', save = False):
+def plotMap(fn,lonlim=None,latlim=None, glon0=None, projection='stereo', save = False):
     root, fname = os.path.split(fn)
     if os.path.splitext(fn)[1] in ('.h5', '.hdf5'):
         lon, lat = getCoord(fn)
@@ -37,6 +37,7 @@ def plotMap(fn,lonlim=None,latlim=None, projection='stereo', save = False):
         print ('Wrong file format')
         return
     # Limits
+    
     if lonlim is None:
         
         X = nanmax(lon)
@@ -49,6 +50,9 @@ def plotMap(fn,lonlim=None,latlim=None, projection='stereo', save = False):
             x0 = x - 5 if x-5 < -180 else -180
             x1 = X + 5 if X+5 < 180 else 180
         lonlim = [round(x0), round(x1)]
+    if glon0 is None:
+        glon0 = nanmedian(lonlim)
+        
     if latlim is None:
         
         y = nanmin(lat)
@@ -58,7 +62,7 @@ def plotMap(fn,lonlim=None,latlim=None, projection='stereo', save = False):
         
         latlim = [round(y0), round(y1)]
     fig, ax = gm.plotCartoMap(latlim=latlim,lonlim=lonlim, projection=projection,
-                    states=1, background_color='gray')
+                    states=1, background_color='gray', lon0=glon0)
     ax.set_title(fname)
     ax.scatter(lon,lat, marker='.', c='r', s=25, transform=ccrs.PlateCarree())
     print ('Total {} of receivers'.format(lat.size))
@@ -75,7 +79,8 @@ if __name__ == '__main__':
     p.add_argument('-x', '--lonlim', type=float, nargs=2, default = None)
     p.add_argument('-y', '--latlim', type=float, nargs=2, default = None)
     p.add_argument('--proj', type=str, default = 'stereo')
+    p.add_argument('--lon0', type=float, default = None)
     p.add_argument('--save', action='store_true')
     
     P = p.parse_args()
-    plotMap(P.hdffile, P.lonlim, P.latlim, P.proj, P.save)
+    plotMap(P.hdffile, P.lonlim, P.latlim, P.lon0, P.proj, P.save)
