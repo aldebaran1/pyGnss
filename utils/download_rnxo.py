@@ -911,9 +911,12 @@ if __name__ == '__main__':
         if P.db == 'all':
             a = ['cors', 'cddis', 'unavco', 'brasil', 'chain', 'euref', 'ring', 'bev', 'sonel', 'nz', 'nl', 'd', 'fr', 'epos', 'es']
             for db in a:
-                getRinexObs(date = d, db = db, 
+                try:
+                    getRinexObs(date = d, db = db, 
                             odir = P.dir, rx = P.rx, dllist = P.dllist, 
                             hr = P.highrate, force = P.force, fix = P.fixpath)
+                except:
+                    print (f"{db} Didn't work")
         elif P.db == 'highlat':
             a = ['cors', 'cddis', 'unavco', 'euref', 'sonel', 'epos']
             for db in a:

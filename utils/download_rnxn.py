@@ -116,8 +116,8 @@ def getRinexNav(date:str = None,
             if not os.path.exists(odir):
                 subprocess.call(f'mkdir -p "{odir}"', shell=True)
             print (f"Downloading: {rpath}{f}")
-            ftps.retrbinary("RETR " + f, open(f'{odir}{f}', 'wb').write)
             try:
+                ftps.retrbinary("RETR " + f, open(f'{odir}{f}', 'wb').write)
                 unzip_rm(f'{odir}{f}')
             except:
                 pass
@@ -136,8 +136,8 @@ def getRinexNav(date:str = None,
             if not os.path.exists(odir):
                 subprocess.call(f'mkdir -p "{odir}"', shell=True)
             print (f"Downloading: {rpath}{f}")
-            ftps.retrbinary("RETR " + f, open(f'{odir}{f}', 'wb').write)
             try:
+                ftps.retrbinary("RETR " + f, open(f'{odir}{f}', 'wb').write)
                 unzip_rm(f'{odir}{f}')
             except:
                 pass
@@ -152,19 +152,26 @@ def getRinexNav(date:str = None,
     sp3file_r3 = f'{odir}IGS0OPSRAP_{dt.strftime("%Y%j")}0000_01D_15M_ORB.SP3.gz'
     
     print (f'Downloading {urlnav}')
-    with urllib.request.urlopen(urlnav, timeout=60) as response, open(navfile, 'wb') as out_file:
-        if not os.path.exists(odir):
-            subprocess.call(f'mkdir -p "{odir}"', shell=True)
-        data = response.read() # a `bytes` object
-        out_file.write(data)
-    unzip_rm(navfile)
+    try:
+        with urllib.request.urlopen(urlnav, timeout=60) as response, open(navfile, 'wb') as out_file:
+            if not os.path.exists(odir):
+                subprocess.call(f'mkdir -p "{odir}"', shell=True)
+            data = response.read() # a `bytes` object
+            out_file.write(data)
+        unzip_rm(navfile)
+    except:
+        pass
     print (f'Downloading {urlsp3}')
-    with urllib.request.urlopen(urlsp3, timeout=60) as response, open(sp3file, 'wb') as out_file:
-        if not os.path.exists(odir):
-            subprocess.call(f'mkdir -p "{odir}"', shell=True)
-        data = response.read() # a `bytes` object
-        out_file.write(data)
-    unzip_rm(sp3file)
+    
+    try:
+        with urllib.request.urlopen(urlsp3, timeout=60) as response, open(sp3file, 'wb') as out_file:
+            if not os.path.exists(odir):
+                subprocess.call(f'mkdir -p "{odir}"', shell=True)
+            data = response.read() # a `bytes` object
+            out_file.write(data)
+        unzip_rm(sp3file)
+    except:
+        pass
     try:
         print (f'Downloading {urlsp3_r3}')
         with urllib.request.urlopen(urlsp3_r3, timeout=60) as response, open(sp3file_r3, 'wb') as out_file:
