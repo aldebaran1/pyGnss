@@ -47,15 +47,17 @@ urllist = {'cddis': 'https://cddis.nasa.gov/archive/gnss/data/daily/',
            'brasil': 'https://geoftp.ibge.gov.br/informacoes_sobre_posicionamento_geodesico/rbmc/dados/',
            'unavco': 'https://data.unavco.org/archive/gnss/rinex/obs/',
            'unavcohr': 'https://data.unavco.org/archive/gnss/highrate/1-Hz/rinex/',
-           'ring': 'bancadati2.gm.ingv.it',
-           'bev': 'https://gnss.bev.gv.at/at.gv.bev.dc/data/',
+           'ring': 'bancadati2.gm.ingv.it', #italy
+           'bev': 'https://gnss.bev.gv.at/at.gv.bev.dc/data/', #austria
            'sonel': 'ftp.sonel.org',
            'nz': 'https://data.geonet.org.nz/gnss/rinex/',
            'nl': 'https://gnss1.tudelft.nl/dpga/rinex/',
            'd': 'https://igs.bkg.bund.de/root_ftp/GREF/obs/',
-           'fr': 'rgpdata.ensg.eu',
+           'fr': 'rgpdata.ensg.eu/data/',
+           'fr2': 'ftp://renag.unice.fr/',
            'es': 'https://datos-geodesia.ign.es/ERGNSS/diario_30s/',
-           'epos': 'https://datacenter.gnss-epos.eu/'
+           'epos': 'https://datacenter.gnss-epos.eu/',
+           's': 'ftpswepos-open.lantmateriet.se'
            }
     
 def download_request(urlpath, filename, force=False, hr=False):
@@ -291,7 +293,7 @@ def getStateList(year, doy, F, db, rxn=None, hr=False):
                 if arg.endswith(('d.Z', 'MO.crx.gz')):
                     stations.append(arg)
         
-        elif db == 'fr':
+        elif db in ('fr', 's'):
             for line in d:
                 arg = line.split()[-1]
                 if arg.endswith( '01D_30S_MO.crx.gz'):
@@ -838,7 +840,7 @@ def getRinexObs(date,
             ofn = f'{odir}{os.sep}{rx}'
             download_request(url+rx, ofn, force=force, hr=hr)
             
-    elif db in ('sonel', 'fr'):
+    elif db in ('sonel', 'fr', 'fr2'):
         ftp = ftplib.FTP(urllist[db])
         ftp.login()
         if hr:
@@ -849,6 +851,8 @@ def getRinexObs(date,
                 rpath = f'gps/data/{year}/{doy}/'
             elif db == 'fr':
                 rpath = f'pub/data_v3/{year}/{doy}/data_30/'
+            elif db == 'fr2':
+                rpath = f'data/{year}/{doy}'
         ftp.cwd(rpath)
         rxlist = np.array(getStateList(year, doy, ftp, db, rxn=rx))
         if isinstance(rx, str):
@@ -859,6 +863,21 @@ def getRinexObs(date,
         for urlrx in rxlist:
             download_cddis(ftp, urlrx, odir+urlrx, force=force)
     
+    elif db == 's':
+        ftp = ftplib.FTP(urllist[db])
+        ftp.login('smrak', 'e_8m1]t;#%')
+        if hr:
+            print ("Sonel database does not support highrate data quite yet")
+            return
+        rpath = 'rinex3/{year}/{doy}/'
+        rxlist = np.array(getStateList(year, doy, ftp, db, rxn=rx))
+        if isinstance(rx, str):
+            irx = np.isin(np.asarray(rxlist), rx)
+            rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
+        
+        print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
+        for urlrx in rxlist:
+            download_cddis(ftp, urlrx, odir+urlrx, force=force)
             
     elif db == 'ring':
         if hr:
