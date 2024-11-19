@@ -313,21 +313,38 @@ def getROTI(sTEC: np.ndarray, ts: float = 1, N: int = 10):
     return ROTI
 
 def gpsSatPositionSP3(fsp3, dt, sv=None, rx_position=None, coords='xyz'):
+    assert rx_position is not None
     assert sv is not None
     # Read in data
     if isinstance(dt, datetime):
         dt = [dt]
     if isinstance(dt, list):
         dt = np.asarray(dt)
-    svlist = gr.load(fsp3).sv.values
+    if isinstance(fsp3, str):
+        D = gr.load(fsp3)
+    elif isinstance(fsp3, (list, np.ndarray)):
+        L = np.array(fsp3).size
+        for i in range(1,L):
+            if i == 1:
+                D = xarray.concat((gr.load(fsp3[0]), gr.load(fsp3[i])), dim=('time'))
+            else:
+                D = xarray.concat((D, gr.load(fsp3[i])), dim=('time'))
+    elif isinstance(fsp3, xarray.Dataset):
+        D = fsp3
+    else:
+        print (f"{fsp3} is in an unrecognized format.")
+        return
+    
+    svlist = D.sv.values
+    
     if sv in svlist:
-        D = gr.load(fsp3).sel(sv=sv)
+        d = D.sel(sv=sv)
         
         dt = dt.astype('datetime64[s]')
-        navtimes = D.time.values.astype('datetime64[s]')
-        CSx = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,0])
-        CSy = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,1])
-        CSz = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,2])
+        navtimes = d.time.values.astype('datetime64[s]')
+        CSx = interpolate.CubicSpline(navtimes.astype(int), d.position.values[:,0])
+        CSy = interpolate.CubicSpline(navtimes.astype(int), d.position.values[:,1])
+        CSz = interpolate.CubicSpline(navtimes.astype(int), d.position.values[:,2])
         ecefxi = CSx(dt.astype(int))*1e3
         ecefyi = CSy(dt.astype(int))*1e3
         ecefzi = CSz(dt.astype(int))*1e3
@@ -343,7 +360,24 @@ def gpsSatPositionSP3(fsp3, dt, sv=None, rx_position=None, coords='xyz'):
         return np.nan * np.zeros((3, dt.size))
     
 def gpsSatPosition(fnav, dt, sv=None, rx_position=None, coords='xyz'):
-    navdata = gr.load(fnav).sel(sv=sv)
+    assert sv is not None
+    assert rx_position is not None
+    
+    if isinstance(fnav, str):
+        navdata = gr.load(fnav).sel(sv=sv)
+    elif isinstance(fnav, xarray.Dataset):
+        navdata = fnav.sel(sv=sv)
+    elif isinstance(fnav, (list, np.ndarray)):
+        L = np.array(fnav).size
+        for i in range(1,L):
+            if i == 1:
+                D = xarray.concat((gr.load(fnav[0]), gr.load(fnav[i])), dim=('time'))
+            else:
+                D = xarray.concat((D, gr.load(fnav[i])), dim=('time'))
+        navdata = D.sel(sv=sv)
+    else:
+        print (f"{fnav} is in an unrecognized format.")
+        return
     timesarray = np.asarray(dt,dtype='datetime64[ns]') #[datetime64 [ns]]
     # Manipulate with times, epochs and crap like this
     navtimes = navdata.time.values # [datetime64 [ns]]
@@ -425,11 +459,22 @@ def getIonosphericPiercingPoints(rx_xyz, sv, obstimes, ipp_alt, navfn,
         rec_lon = rx_xyz[1]
         rec_alt = rx_xyz[2]
         rx_xyz = geodetic2ecef(lat = rx_xyz[0], lon = rx_xyz[1], alt = rec_alt)
-    
+    if isinstance(navfn, str):
+        eph_file = os.path.splitext(navfn)[-1].lower()
+    elif isinstance(navfn, (list,np.ndarray)):
+        eph_file = os.path.splitext(navfn[0])[-1].lower()
+    else:
+        print (f"{navfn} type of the file is not supported.")            
     if sv[0] in ('G', 'E'):
-        if navfn.lower().endswith('n'):
-            xyz = gpsSatPosition(navfn, obstimes, sv=sv, rx_position=rx_xyz, coords='xyz')
-        elif navfn.lower().endswith('sp3'):
+        if eph_file.endswith('n'):
+            if sv[0] == 'G': #Works for GPS ephemeris file only
+                xyz = gpsSatPosition(navfn, obstimes, sv=sv, rx_position=rx_xyz, coords='xyz')
+        elif eph_file.endswith('g'):
+            aer_vector = gloSatPosition(navfn=navfn, sv=sv, obstimes=obstimes, rx_position=[rec_lon, rec_lat, rec_alt], cs='aer')
+            fm = np.sin(np.radians(aer_vector[1]))
+            r_new = ipp_alt / fm
+            lla_vector = np.array(aer2geodetic(aer_vector[0], aer_vector[1], r_new, rec_lat, rec_lon, rec_alt))
+        elif eph_file.endswith('sp3'):
             xyz = gpsSatPositionSP3(navfn, obstimes, sv=sv, rx_position=rx_xyz, coords='xyz')
         az,el,r = ecef2aer(xyz[0,:],xyz[1,:],xyz[2,:],rec_lat, rec_lon, rec_alt)
         aer_vector = np.array([az, el, r])
@@ -453,11 +498,7 @@ def getIonosphericPiercingPoints(rx_xyz, sv, obstimes, ipp_alt, navfn,
                 else:
                     lla_vector = np.array([np.nan, np.nan, np.nan])
         
-    elif sv[0] == 'R':
-        aer_vector = gloSatPosition(navfn=navfn, sv=sv, obstimes=obstimes, rx_position=[rec_lon, rec_lat, rec_alt], cs='aer')
-        fm = np.sin(np.radians(aer_vector[1]))
-        r_new = ipp_alt / fm
-        lla_vector = np.array(aer2geodetic(aer_vector[0], aer_vector[1], r_new, rec_lat, rec_lon, rec_alt))
+    
     else:
         print ('Type in valid sattype initial. "G" for GPS, "R" for GLONASS, and "E" for Galileo')
         
@@ -876,7 +917,7 @@ def getAER(times, rxp, fsp3, svlist = None, el_mask=None, H = 350):
     
     AER = np.nan * np.ones((times.size, svlist.size, 3))
     
-    if rxp[-1] < 0:
+    if rxp[-1] < 0 or rxp[-1]==np.inf or rxp[-1]==np.nan:
         rxp[-1] = 0
     
     for isv, sv in enumerate(svlist):
@@ -907,7 +948,7 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
         
         if fsp3 is not None:
             dt = np.array([np.datetime64(ttt) for ttt in D.time.values])
-            assert os.path.exists(fsp3)
+            # assert os.path.exists(fsp3)
             if el_mask is not None:
                 aer = getIonosphericPiercingPoints(D.position, sv, dt, 
                                                    ipp_alt=H, navfn=fsp3,
@@ -929,9 +970,15 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
         if int(D.version) == 2:
             if sv[0] == 'G':
                 if 'C1' in list(D.variables):
-                    stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
-                                             P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv], channel=2,
-                                             maxgap=maxgap, maxjump=maxjump)
+                    if 'C2' in list(D.variables) and np.sum(np.isfinite(D.sel(sv=sv).C2.values)) > 0:
+                        stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
+                                                 P1=D.C1.values[idel,isv], P2=D.C2.values[idel,isv], channel=2,
+                                                 maxgap=maxgap, maxjump=maxjump)
+                    else:
+                        stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
+                                                 P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv], channel=2,
+                                                 maxgap=maxgap, maxjump=maxjump)
+                        
                 elif 'P1' in list(D.variables):
                     stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
                                              P1=D.P1.values[idel,isv], P2=D.P2.values[idel,isv], channel=2,
@@ -939,9 +986,14 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                 else:
                     stec[idel, isv] = np.nan * np.arange(np.nansum(idel))
             elif sv[0] == 'E':
-                stec[idel, isv] = getPhaseCorrTEC(L1=D.L8.values[idel,isv], L2=D.L8.values[idel,isv],
-                                         P1=D.C8.values[idel,isv], P2=D.C8.values[idel,isv], channel=8,
-                                         maxgap=maxgap, maxjump=maxjump)
+                if "L8" in list(D.variables):
+                    stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L8.values[idel,isv],
+                                             P1=D.C1.values[idel,isv], P2=D.C8.values[idel,isv], channel=8,
+                                             maxgap=maxgap, maxjump=maxjump)
+                elif "L5" in list(D.variables):
+                    stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L5.values[idel,isv],
+                                             P1=D.C1.values[idel,isv], P2=D.C5.values[idel,isv], channel=5,
+                                             maxgap=maxgap, maxjump=maxjump)
             else:
                 print (f"Constallation {sv[0]} not yet supported")
         elif int(D.version) == 3:
@@ -1052,7 +1104,7 @@ def getDCBfromSTEC(y, aer, el_mask=30, H=350, ts=30, decimate=False,
         ret = np.nansum(np.nanstd(vtec, axis=1)**2)
         return ret
     if decimate:
-        target = 60
+        target = 180
         tskip = int(target/ts)
     else:
         tskip = 1
