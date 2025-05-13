@@ -74,6 +74,7 @@ def getRinexNav(date:str = None,
     except Exception as e:
         raise (e)
     year = str(dt.year)
+    yy = year[-2:]
     doy = dt.timetuple().tm_yday
     # Correct spelling to unify the length (char) of the doy in year (DOY)
     if len(str(doy)) == 2:
@@ -95,22 +96,16 @@ def getRinexNav(date:str = None,
     urlrx = 'JPL0OPSRAP_' + year + doy + '0000_01D_02H_GIM.INX.gz' 
     d = []
     ftps.retrlines('LIST', d.append)
-    download(ftps, urlrx, odir+urlrx)
-    
-    # # Open a connection to the FTP address
-    # with ftplib.FTP(url[1],'anonymous','guest',timeout=15) as F:
-    #     rpath = url[2] + '/' + year + '/' + doy + '/'
-    #     F.cwd(rpath)
-    #     # urlrx = 'jplg' +doy + '0.' + year[-2:] + 'i.Z'
-        
-    #     print (urlrx)
-    #     try:
-    #         # urlrx must in in a format "nnnDDD0.YYo.xxx"
-    #         download(F, urlrx, odir+urlrx)
-    #     except Exception as e:
-    #         print (e)
-            
+    dlines = np.array([d1.split()[-1] for d1 in d])
+    if urlrx not in dlines:
+        urlrx = f'jplg{doy}0.{yy}i.Z'
+    if urlrx not in dlines:
+        print("No files were found for this day")
+        return
+    download(ftps, urlrx, odir+urlrx)    
     unzip(odir+urlrx)
+    return
+
 if __name__ == '__main__':
     from argparse import ArgumentParser
     p = ArgumentParser()
