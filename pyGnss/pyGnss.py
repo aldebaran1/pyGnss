@@ -1002,18 +1002,21 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                 if 'C1' in list(D.variables):
                     if 'C2' in list(D.variables) and np.sum(np.isfinite(D.sel(sv=sv).C2.values)) > 0:
                         A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
-                                                 P1=D.C1.values[idel,isv], P2=D.C2.values[idel,isv], channel=2,
+                                                 P1=D.C1.values[idel,isv], P2=D.C2.values[idel,isv], 
+                                                 f1=g1, f2=g2,
                                                  el=AER[idel,isv,1], return_tec_err=return_tec_error,
                                                  maxgap=maxgap, maxjump=maxjump, )
                     else:
                         A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
-                                                 P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv], channel=2,
+                                                 P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv],
+                                                 f1=g1, f2=g2,
                                                  el=AER[idel,isv,1], return_tec_err=return_tec_error,
                                                  maxgap=maxgap, maxjump=maxjump)
                         
                 elif 'P1' in list(D.variables):
                     A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
-                                             P1=D.P1.values[idel,isv], P2=D.P2.values[idel,isv], channel=2,
+                                             P1=D.P1.values[idel,isv], P2=D.P2.values[idel,isv],
+                                             f1=g1, f2=g2,
                                              el=AER[idel,isv,1], return_tec_err=return_tec_error,
                                              maxgap=maxgap, maxjump=maxjump)
                 else:
@@ -1022,12 +1025,26 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
             elif sv[0] == 'E':
                 if "L8" in list(D.variables):
                     A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L8.values[idel,isv],
-                                             P1=D.C1.values[idel,isv], P2=D.C8.values[idel,isv], channel=8,
+                                             P1=D.C1.values[idel,isv], P2=D.C8.values[idel,isv],
+                                             f1=e1, f2=e8,
                                              el=AER[idel,isv,1], return_tec_err=return_tec_error,
                                              maxgap=maxgap, maxjump=maxjump)
                 elif "L5" in list(D.variables):
                     A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L5.values[idel,isv],
-                                             P1=D.C1.values[idel,isv], P2=D.C5.values[idel,isv], channel=5,
+                                             P1=D.C1.values[idel,isv], P2=D.C5.values[idel,isv],
+                                             f1=e1, f2=e5,
+                                             el=AER[idel,isv,1], return_tec_err=return_tec_error,
+                                             maxgap=maxgap, maxjump=maxjump)
+                elif "L6" in list(D.variables):
+                    A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L6.values[idel,isv],
+                                             P1=D.C1.values[idel,isv], P2=D.C6.values[idel,isv],
+                                             f1=e1, f2=e6,
+                                             el=AER[idel,isv,1], return_tec_err=return_tec_error,
+                                             maxgap=maxgap, maxjump=maxjump)
+                elif "L7" in list(D.variables):
+                    A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L7.values[idel,isv],
+                                             P1=D.C1.values[idel,isv], P2=D.C7.values[idel,isv],
+                                             f1=e1, f2=e7,
                                              el=AER[idel,isv,1], return_tec_err=return_tec_error,
                                              maxgap=maxgap, maxjump=maxjump)
             else:
@@ -1290,11 +1307,13 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
 def getCNR(D, fsp3=None, el_mask=30, H=350, key='S1'):
     if isinstance(D, str):
         D = gr.load(D)
-    
+    snr_keys = np.array(list(D.variables)[1:-1])[np.array(list(map(lambda x: bool(re.match(r'S[1-9][A-Z]', x)), np.array(list(D.variables)[1:-1]))))]
+    if snr_keys.size == 0:
+        return np.nan * np.ones((D.time.size, D.sv.values.size))
+        
     if int(D.version) == 3 and len(key) == 2:
-        all_keys= np.array(list(D.variables)[1:-1])[np.array(list(map(lambda x: bool(re.match(r'S[1-9][A-Z]', x)), np.array(list(D.variables)[1:-1]))))] 
-        imax = np.array([np.sum(np.isfinite(D[k].values)) for k in all_keys]).argmax()
-        key = all_keys[imax]
+        imax = np.array([np.sum(np.isfinite(D[k].values)) for k in snr_keys]).argmax()
+        key = snr_keys[imax]
     time = D.time.values
     try:
         CNO = D[key].values
