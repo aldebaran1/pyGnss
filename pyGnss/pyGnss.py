@@ -30,7 +30,7 @@ e5 = 1176450000
 e6 = 1278750000
 e7 = 1207140000
 e8 = 1191795000
-#
+#constants for BeiDou
 c1 = 1575420000
 c2 = 1561098000
 c5 = 1176450000
@@ -996,7 +996,6 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                 AER[:, isv, 2] = aer[2]
         else:
             idel = np.ones(D.time.values.size, dtype=bool)
-        
         if int(D.version) == 2:
             if sv[0] == 'G':
                 if 'C1' in list(D.variables):
@@ -1047,17 +1046,28 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                                              f1=e1, f2=e7,
                                              el=AER[idel,isv,1], return_tec_err=return_tec_error,
                                              maxgap=maxgap, maxjump=maxjump)
+                else:
+                    A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
             else:
+                A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
                 print (f"Constallation {sv[0]} not yet supported")
         elif int(D.version) == 3:
             if sv[0] == 'G':
                 if 'L2L' in list(D.variables):
                     if np.sum(np.isfinite(D.sel(sv=sv)['L2L'].values)) > 0:
                         lf2, cf2 = 'L2L', 'C2L'
-                    else:
+                    elif np.sum(np.isfinite(D.sel(sv=sv)['L2W'].values)) > 0:
                         lf2, cf2 = 'L2W', 'C2W'
-                else:
+                    elif np.sum(np.isfinite(D.sel(sv=sv)['L2Y'].values)) > 0:
+                        lf2, cf2 = 'L2Y', 'C2Y'
+                    else:
+                        A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
+                elif 'L2W' in list(D.variables):
                     lf2, cf2 = 'L2W', 'C2W'
+                elif 'L2Y' in list(D.variables):
+                    lf2, cf2 = 'L2Y', 'C2Y'
+                else:
+                    A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
                 A = getPhaseCorrTEC(L1=D['L1C'].values[idel,isv], L2=D[lf2].values[idel,isv],
                                          P1=D['C1C'].values[idel,isv], P2=D[cf2].values[idel,isv], 
                                          f1=g1,f2=g2,
@@ -1333,6 +1343,7 @@ def getCNR(D, fsp3=None, el_mask=30, H=350, key='S1'):
                 CNO[idel, isv] = np.nan
         except:
             pass
+    CNO[CNO<1] = np.nan
     return CNO
 
 def getDTEC(fnc, fsp3, el_mask=30, maxjump=1.6, maxgap=1, eps=1, tsps=30):
