@@ -21,12 +21,25 @@ from scipy.signal import savgol_filter
 import re
 
 #constnats for GPS
-f1 = 1575420000
-f2 = 1227600000
-f5 = 1176450000
+g1 = 1575420000
+g2 = 1227600000
+g5 = 1176450000
+#constnats for Galieleo
+e1 = 1575420000
+e5 = 1176450000
+e6 = 1278750000
+e7 = 1207140000
 e8 = 1191795000
+#constants for BeiDou
+c1 = 1575420000
+c2 = 1561098000
+c5 = 1176450000
+c6 = 1268520000
+c7 = 1207140000
+c8 = 1191795000
+
 c0 = 299792458
-freq = {'1': f1, '2': f2, '5': f5, '8': e8}
+# freq = {'1': f1, '2': f2, '5': f5, '8': e8}
 
 def getSatBias(fn, sv=None):
     import os
@@ -55,54 +68,54 @@ def getSatBias(fn, sv=None):
         return svbias[sv]
 
 # %% TEC
-def getPRNSlantTEC(P1, P2, units='m'):
-    """
-    Sebsatijan Mrak
-    Function returns slant TEC in TECU units. Input data are PRN information
-    at two frequences, where f1 and f2 are difined as global variables. It assumes,
-    that you use L1 and L2 frquencies. In case of different GNSS constellation or
-    use of L5, correct the indexes. 
-    Default config. assumes PRN distance in meters [m], otherwise, fulfill the 
-    function parameter 'unit' to correct the units.
-    Output units are by default in meters.
-    """     
-    if units == 'm':
-        sTEC = ((1/40.3) * (( pow(f2, 2) * pow(f1, 2) ) / 
-                (pow(f1, 2) - pow(f2, 2))) * (P2 - P1)) / pow(10,16)
-    elif units == 'rad':
-        sTEC = ((c0/(40.3*2*np.pi)) * (( pow(f2, 2) * pow(f1, 2) ) / 
-                (pow(f1, 2) - pow(f2, 2))) * (P2/f2- P1/f1)) / pow(10,16)
+# def getPRNSlantTEC(P1, P2, units='m'):
+#     """
+#     Sebsatijan Mrak
+#     Function returns slant TEC in TECU units. Input data are PRN information
+#     at two frequences, where f1 and f2 are difined as global variables. It assumes,
+#     that you use L1 and L2 frquencies. In case of different GNSS constellation or
+#     use of L5, correct the indexes. 
+#     Default config. assumes PRN distance in meters [m], otherwise, fulfill the 
+#     function parameter 'unit' to correct the units.
+#     Output units are by default in meters.
+#     """     
+#     if units == 'm':
+#         sTEC = ((1/40.3) * (( pow(f2, 2) * pow(f1, 2) ) / 
+#                 (pow(g1, 2) - pow(f2, 2))) * (P2 - P1)) / pow(10,16)
+#     elif units == 'rad':
+#         sTEC = ((c0/(40.3*2*np.pi)) * (( pow(f2, 2) * pow(f1, 2) ) / 
+#                 (pow(f1, 2) - pow(f2, 2))) * (P2/f2- P1/f1)) / pow(10,16)
             
-    elif units == 'cycle':
-        sTEC = ((c0/(40.3)) * (( pow(f2, 2) * pow(f1, 2) ) / 
-                (pow(f1, 2) - pow(f2, 2))) * (P2/f2 - P1/f1)) / pow(10,16)        
+#     elif units == 'cycle':
+#         sTEC = ((c0/(40.3)) * (( pow(f2, 2) * pow(f1, 2) ) / 
+#                 (pow(f1, 2) - pow(f2, 2))) * (P2/f2 - P1/f1)) / pow(10,16)        
         
-    return sTEC
+#     return sTEC
     
-def getPSlantTEC(L1, L2, units = 'cycle'):
-    """
-    Sebsatijan Mrak
-    Function returns slant TEC in TECU units. Input data are phase information
-    at two frequences, where f1 and f2 are difined as global variables. It assumes,
-    that you use L1 and L2 frquencies. In case of different GNSS constellation or
-    use of L5, correct the indexes. 
-    Default config. assumes phase information in cycles [cycle], otherwise, 
-    fulfill the function parameter 'unit' to correct the units. 
-    Output units are by default in meters.
+# def getPSlantTEC(L1, L2, units = 'cycle'):
+#     """
+#     Sebsatijan Mrak
+#     Function returns slant TEC in TECU units. Input data are phase information
+#     at two frequences, where f1 and f2 are difined as global variables. It assumes,
+#     that you use L1 and L2 frquencies. In case of different GNSS constellation or
+#     use of L5, correct the indexes. 
+#     Default config. assumes phase information in cycles [cycle], otherwise, 
+#     fulfill the function parameter 'unit' to correct the units. 
+#     Output units are by default in meters.
     
-    Use only if there is no cycle slips in raw phase file!
-    """
-    if units == 'cycle':
-        sTEC = ((c0/40.3) * (( pow(f2, 2) * pow(f1, 2) ) / 
-                (pow(f1, 2) - pow(f2, 2))) * (L1/f1 - L2/f2)) / pow(10,16)
-    elif units == 'rad':
-        sTEC = ((c0/(40.3*2*np.pi)) * (( pow(f2, 2) * pow(f1, 2) ) / 
-                (pow(f1, 2) - pow(f2, 2))) * (L1/f1 - L2/f2)) / pow(10,16)
-    elif units == 'm':
-        sTEC = ((1/40.3) * (( pow(f2, 2) * pow(f1, 2) ) / 
-                (pow(f1, 2) - pow(f2, 2))) * (L1 - L2)) / pow(10,16)
+#     Use only if there is no cycle slips in raw phase file!
+#     """
+#     if units == 'cycle':
+#         sTEC = ((c0/40.3) * (( pow(f2, 2) * pow(f1, 2) ) / 
+#                 (pow(f1, 2) - pow(f2, 2))) * (L1/f1 - L2/f2)) / pow(10,16)
+#     elif units == 'rad':
+#         sTEC = ((c0/(40.3*2*np.pi)) * (( pow(f2, 2) * pow(f1, 2) ) / 
+#                 (pow(f1, 2) - pow(f2, 2))) * (L1/f1 - L2/f2)) / pow(10,16)
+#     elif units == 'm':
+#         sTEC = ((1/40.3) * (( pow(f2, 2) * pow(f1, 2) ) / 
+#                 (pow(f1, 2) - pow(f2, 2))) * (L1 - L2)) / pow(10,16)
         
-    return sTEC
+#     return sTEC
 
 def slantTEC(C1, C2, L1, L2, frequency = 2):
     global freq, c0
@@ -113,7 +126,7 @@ def slantTEC(C1, C2, L1, L2, frequency = 2):
     
     return phasetec + N
 
-def getPhaseCorrTEC(L1, L2, P1, P2, tec_err=False, channel=2,
+def getPhaseCorrTEC(L1, L2, P1, P2, el=None, return_tec_err=False, f1=g1, f2=g2,
                     intervals=None, fN = None, maxgap=3, maxjump=2):
     """
     Greg Starr
@@ -126,25 +139,26 @@ def getPhaseCorrTEC(L1, L2, P1, P2, tec_err=False, channel=2,
     at this place.    
     """
     #
-    global f1, f2, f5, e8
+    # global g1, g2, f5, e8
     #Get intervals between nans and/or cycle slips    
-    idx, ranges = getIntervals(L1, L2, P1, P2, maxgap=maxgap, maxjump=maxjump)
+    idx, ranges = getIntervals(L1, L2, P1, P2, f1=f1, f2=f2, maxgap=maxgap, maxjump=maxjump)
     ERR = np.nan * np.zeros(len(L1))
+    OFF = np.nan * np.zeros(len(L1))
     TEC = np.nan * np.zeros(len(L1))
     for r in ranges:
         if (r[1] - r[0]) > 1:
             if fN is None: # GPS
-                F1 = f1
-                if channel == 2:
-                    F2 = f2
-                elif channel == 5:
-                    F2 = f5
-                elif channel == 8:
-                    F2 = e8
-                range_tec = ((F1**2 * F2**2) / (F1**2 - F2**2)) * (P2[r[0] : r[1]] - 
+                # F1 = f1
+                # if channel == 2:
+                    # F2 = f2
+                # elif channel == 5:
+                    # F2 = f5
+                # elif channel == 8:
+                    # F2 = e8
+                range_tec = ((f1**2 * f2**2) / (f1**2 - f2**2)) * (P2[r[0] : r[1]] - 
                                           P1[r[0] : r[1]]) /40.3 / pow(10, 16)
-                phase_tec = ((F1**2 * F2**2) / (F1**2 - F2**2)) * (c0/40.3) * \
-                         (L1[r[0] : r[1]] / F1 - L2[r[0] : r[1]] / F2) / pow(10, 16)
+                phase_tec = ((f1**2 * f2**2) / (f1**2 - f2**2)) * (c0/40.3) * \
+                         (L1[r[0] : r[1]] / f1 - L2[r[0] : r[1]] / f2) / pow(10, 16)
             else: # GLONASS
                 f1 = (1602 + fN*0.5625) * 1000000
                 f2 = (1246 + fN*0.4375) * 1000000
@@ -152,23 +166,32 @@ def getPhaseCorrTEC(L1, L2, P1, P2, tec_err=False, channel=2,
                                           P1[r[0] : r[1]]) /40.3 / pow(10, 16)
                 phase_tec = ((f1**2 * f2**2) / (f1**2 - f2**2)) * (c0/40.3) * \
                          (L1[r[0] : r[1]] / f1 - L2[r[0] : r[1]] / f2) / pow(10, 16)
-            tec_difference = np.array(sorted(phase_tec-range_tec))
+            # tec_difference = np.array(sorted(phase_tec-range_tec))
             
-            tec_difference = tec_difference[np.isfinite(tec_difference)]
-            median_difference = tec_difference[int(len(tec_difference)/2)]
-            difference_width = tec_difference[int(len(tec_difference)*.75)]-tec_difference[int(len(tec_difference)*.25)]
-            median_error = difference_width/np.sqrt(len(tec_difference))
-            tec = phase_tec - median_difference
-            ERR[r[0]:r[1]] = median_error
-            TEC[r[0]:r[1]] = tec
-    if (tec_err):
+            # tec_difference = tec_difference[np.isfinite(tec_difference)]
+            # median_difference = tec_difference[int(len(tec_difference)/2)]
+            # difference_width = tec_difference[int(len(tec_difference)*.75)]-tec_difference[int(len(tec_difference)*.25)]
+            # median_error = difference_width/np.sqrt(len(tec_difference))
+            # tec = phase_tec - median_difference
+            # ERR[r[0]:r[1]] = median_error
+            # TEC[r[0]:r[1]] = tec
+            tec_difference = phase_tec - range_tec
+            if el is not None:
+                w = np.sin(np.radians(el[r[0]:r[1]]))
+                offset = np.nansum(np.multiply(w, tec_difference)) / np.nansum(w)
+                TECsigma = (np.nansum(np.multiply(w, tec_difference**2)) * np.nansum(w) - np.nansum(np.multiply(w,tec_difference))**2) / (np.nansum(w)**2 - np.nansum(w**2)) 
+            
+                OFF[r[0]:r[1]] = tec_difference
+                ERR[r[0]:r[1]] = np.sqrt(TECsigma)
+            TEC[r[0]:r[1]] = phase_tec - offset #median_difference
+    if return_tec_err:
         return TEC, ERR
     elif intervals:
         return TEC, ranges
     else:       
-        return TEC 
+        return TEC
 
-def getPhaseCorrTECGLONASS(L1,L2,P1,P2, error=False):
+def getPhaseCorrTECGLONASS(L1,L2,P1,P2, f1=g1, f2=g2, error=False):
     range_tec = ((f1**2 * f2**2) / (f1**2 - f2**2)) * (P2 - P1) / 40.3 / pow(10, 16)
     phase_tec = ((f1**2 * f2**2) / (f1**2 - f2**2)) * (c0/40.3) * (L1 / f1 - L2 / f2) / pow(10, 16)
     
@@ -227,11 +250,11 @@ def singleFrequencyTEC(L1, C1, units='m',
                        alt:int = 300):
     # L1 [cycle]: Convert C1 units to [cycles]
     if units == 'm':
-        C1cycle = C1 * f1 / c0
+        C1cycle = C1 * g1 / c0
     elif units == 'cycle':
         C1cycle = C1
     elif units == 'rad':
-        C1cycle = C1 * f1 / c0 / (2*np.pi)
+        C1cycle = C1 * g1 / c0 / (2*np.pi)
     else:
         raise ('Enter appropriate units "m", "rad", or "cycle"')
     dN = np.nanmean(L1 - C1cycle)
@@ -243,7 +266,7 @@ def singleFrequencyTEC(L1, C1, units='m',
             TECrad = TECrad * Fmap
     return TECrad
 
-def retreiveDTECfromPhase(L, f=f1, units='cycle'):
+def retreiveDTECfromPhase(L, f=g1, units='cycle'):
     if units == 'cycle':
         dTEC = L * f**2 / 40.3 / 1E16
     elif units == 'rad':
@@ -259,7 +282,7 @@ def phaseScintillationIndex(data, N):
     """
     y = np.nan * np.zeros(data.shape[0]-N)
     for i in range(data.shape[0] - N):
-        y[i] = np.std(data[i:i+N])
+        y[i] = np.nanstd(data[i:i+N])
     return y
     
 def AmplitudeScintillationIndex(data, N):
@@ -270,7 +293,7 @@ def AmplitudeScintillationIndex(data, N):
     y = np.nan * np.zeros(data.shape[0])
     for i in range(int(N/2-1), data.shape[0] - N):
         if np.sum(np.isfinite(data[i-int(N/2) : i+int(N/2)])) > N/2:
-            y[i] = np.std(data[i-int(N/2) : i+int(N/2)] / np.mean(data[i-int(N/2):i+int(N/2)]))
+            y[i] = np.nanstd(data[i-int(N/2) : i+int(N/2)] / np.nanmean(data[i-int(N/2):i+int(N/2)]))
     return y
 
 def sigmaTEC(x, N):
@@ -313,37 +336,76 @@ def getROTI(sTEC: np.ndarray, ts: float = 1, N: int = 10):
     return ROTI
 
 def gpsSatPositionSP3(fsp3, dt, sv=None, rx_position=None, coords='xyz'):
+    assert rx_position is not None
     assert sv is not None
     # Read in data
     if isinstance(dt, datetime):
         dt = [dt]
     if isinstance(dt, list):
         dt = np.asarray(dt)
-    svlist = gr.load(fsp3).sv.values
+    if isinstance(fsp3, str):
+        D = gr.load(fsp3)
+    elif isinstance(fsp3, (list, np.ndarray)):
+        L = np.array(fsp3).size
+        for i in range(L-1):
+            if i == 0:
+                D = gr.load(fsp3[i])
+            else:
+                D = xarray.concat((D, gr.load(fsp3[i])), dim=('time'))
+    elif isinstance(fsp3, xarray.Dataset):
+        D = fsp3
+    else:
+        print (f"{fsp3} is in an unrecognized format.")
+        return
+    
+    svlist = D.sv.values
+    
     if sv in svlist:
-        D = gr.load(fsp3).sel(sv=sv)
-        
-        dt = dt.astype('datetime64[s]')
-        navtimes = D.time.values.astype('datetime64[s]')
-        CSx = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,0])
-        CSy = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,1])
-        CSz = interpolate.CubicSpline(navtimes.astype(int), D.position.values[:,2])
-        ecefxi = CSx(dt.astype(int))*1e3
-        ecefyi = CSy(dt.astype(int))*1e3
-        ecefzi = CSz(dt.astype(int))*1e3
-        
-        if coords == 'xyz':
-            return np.array([ecefxi, ecefyi, ecefzi])
-        else:
-            h0 = rx_position[2] if rx_position[2] > 0 else 0
-            AER = ecef2aer(x=ecefxi, y=ecefyi, z=ecefzi,
-                           lon0=rx_position[1], lat0=rx_position[0], h0=h0)
-            return np.array(AER)
+        try:
+            d = D.sel(sv=sv)
+            dt = dt.astype('datetime64[s]')
+            navtimes = d.time.values.astype('datetime64[s]')
+            idf = np.isfinite(d.position.values[:,0])
+            CSx = interpolate.CubicSpline(navtimes.astype(int)[idf], d.position.values[idf,0])
+            CSy = interpolate.CubicSpline(navtimes.astype(int)[idf], d.position.values[idf,1])
+            CSz = interpolate.CubicSpline(navtimes.astype(int)[idf], d.position.values[idf,2])
+            ecefxi = CSx(dt.astype(int))*1e3
+            ecefyi = CSy(dt.astype(int))*1e3
+            ecefzi = CSz(dt.astype(int))*1e3
+            
+            if coords == 'xyz':
+                return np.array([ecefxi, ecefyi, ecefzi])
+            else:
+                h0 = rx_position[2] if rx_position[2] > 0 else 0
+                AER = ecef2aer(x=ecefxi, y=ecefyi, z=ecefzi,
+                               lon0=rx_position[1], lat0=rx_position[0], h0=h0)
+                return np.array(AER)
+        except:
+            return np.nan * np.zeros((3, dt.size))
     else:
         return np.nan * np.zeros((3, dt.size))
     
 def gpsSatPosition(fnav, dt, sv=None, rx_position=None, coords='xyz'):
-    navdata = gr.load(fnav).sel(sv=sv)
+    assert sv is not None
+    assert rx_position is not None
+    
+    if isinstance(fnav, str):
+        navdata = gr.load(fnav).sel(sv=sv)
+    elif isinstance(fnav, xarray.Dataset):
+        navdata = fnav.sel(sv=sv)
+    elif isinstance(fnav, (list, np.ndarray)):
+        L = np.array(fnav).size
+        for i in range(L-1):
+            if i == 0:
+                D = xarray.concat((gr.load(fnav[0]), gr.load(fnav[1])), dim=('time'))
+            elif i == 1:
+                continue
+            else:
+                D = xarray.concat((D, gr.load(fnav[i])), dim=('time'))
+        navdata = D.sel(sv=sv)
+    else:
+        print (f"{fnav} is in an unrecognized format.")
+        return
     timesarray = np.asarray(dt,dtype='datetime64[ns]') #[datetime64 [ns]]
     # Manipulate with times, epochs and crap like this
     navtimes = navdata.time.values # [datetime64 [ns]]
@@ -425,11 +487,22 @@ def getIonosphericPiercingPoints(rx_xyz, sv, obstimes, ipp_alt, navfn,
         rec_lon = rx_xyz[1]
         rec_alt = rx_xyz[2]
         rx_xyz = geodetic2ecef(lat = rx_xyz[0], lon = rx_xyz[1], alt = rec_alt)
-    
-    if sv[0] in ('G', 'E'):
-        if navfn.lower().endswith('n'):
-            xyz = gpsSatPosition(navfn, obstimes, sv=sv, rx_position=rx_xyz, coords='xyz')
-        elif navfn.lower().endswith('sp3'):
+    if isinstance(navfn, str):
+        eph_file = os.path.splitext(navfn)[-1].lower()
+    elif isinstance(navfn, (list,np.ndarray)):
+        eph_file = os.path.splitext(navfn[0])[-1].lower()
+    else:
+        print (f"{navfn} type of the file is not supported.")            
+    if sv[0] in ('G', 'E', 'C', 'R'):
+        if eph_file.endswith('n'):
+            if sv[0] == 'G': #Works for GPS ephemeris file only
+                xyz = gpsSatPosition(navfn, obstimes, sv=sv, rx_position=rx_xyz, coords='xyz')
+        elif eph_file.endswith('g'):
+            aer_vector = gloSatPosition(navfn=navfn, sv=sv, obstimes=obstimes, rx_position=[rec_lon, rec_lat, rec_alt], cs='aer')
+            fm = np.sin(np.radians(aer_vector[1]))
+            r_new = ipp_alt / fm
+            lla_vector = np.array(aer2geodetic(aer_vector[0], aer_vector[1], r_new, rec_lat, rec_lon, rec_alt))
+        elif eph_file.endswith('sp3'):
             xyz = gpsSatPositionSP3(navfn, obstimes, sv=sv, rx_position=rx_xyz, coords='xyz')
         az,el,r = ecef2aer(xyz[0,:],xyz[1,:],xyz[2,:],rec_lat, rec_lon, rec_alt)
         aer_vector = np.array([az, el, r])
@@ -453,11 +526,7 @@ def getIonosphericPiercingPoints(rx_xyz, sv, obstimes, ipp_alt, navfn,
                 else:
                     lla_vector = np.array([np.nan, np.nan, np.nan])
         
-    elif sv[0] == 'R':
-        aer_vector = gloSatPosition(navfn=navfn, sv=sv, obstimes=obstimes, rx_position=[rec_lon, rec_lat, rec_alt], cs='aer')
-        fm = np.sin(np.radians(aer_vector[1]))
-        r_new = ipp_alt / fm
-        lla_vector = np.array(aer2geodetic(aer_vector[0], aer_vector[1], r_new, rec_lat, rec_lon, rec_alt))
+    
     else:
         print ('Type in valid sattype initial. "G" for GPS, "R" for GLONASS, and "E" for Galileo')
         
@@ -566,7 +635,7 @@ def phaseScintillation(data, fc=0.1, filt_order=6, polyfit_order=3, fs=1, skip=2
     return L
 
 # %% Utils
-def getIntervals(L1, L2, P1, P2, maxgap=3,maxjump=2):
+def getIntervals(L1, L2, P1, P2, f1=g1, f2=g2, maxgap=3,maxjump=2):
     """
     Greg Starr
     scans through the phase tec of a satellite and determines where "good"
@@ -580,8 +649,8 @@ def getIntervals(L1, L2, P1, P2, maxgap=3,maxjump=2):
         intervals - list of 2-tuples, beginning and end of each "good" interval
                     as a Pandas/numpy
     """
-    f1 = 1575420000
-    f2 = 1227600000
+    # f1 = 1575420000
+    # f2 = 1227600000
     
     r = np.array(range(len(P1)))
     idx = np.isfinite(L1) & np.isfinite(L2) & np.isfinite(P1) & np.isfinite(P2)
@@ -743,7 +812,7 @@ def singleRx(obs, nav, sv='G23', args=['L1','S1'], tlim=None,rawplot=False,
                 _plot(times,X,arg)
         if arg[0] == 'L' or arg[0] == 'C':
             if arg == 'C1':
-                X = X * f1 / c0 # To cycles
+                X = X * g1 / c0 # To cycles
             Xd = uf.phaseDetrend(X, order=porder)
                 
             if polyfit:
@@ -876,7 +945,7 @@ def getAER(times, rxp, fsp3, svlist = None, el_mask=None, H = 350):
     
     AER = np.nan * np.ones((times.size, svlist.size, 3))
     
-    if rxp[-1] < 0:
+    if rxp[-1] < 0 or rxp[-1]==np.inf or rxp[-1]==np.nan:
         rxp[-1] = 0
     
     for isv, sv in enumerate(svlist):
@@ -895,19 +964,21 @@ def getAER(times, rxp, fsp3, svlist = None, el_mask=None, H = 350):
     return AER
     
 def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
-            return_aer = False):
+            return_aer = False, return_tec_error=False):
     if isinstance(fnc, xarray.Dataset):
         D = fnc
     else:
         D = gr.load(fnc)
     stec = np.nan * np.zeros((D.time.values.size, D.sv.size))
+    if return_tec_error:
+        tec_sigma = np.nan * np.zeros((D.time.values.size, D.sv.size))
     if return_aer:
         AER = np.nan * np.ones((stec.shape[0], stec.shape[1], 3))
     for isv, sv in enumerate(D.sv.values):
         
         if fsp3 is not None:
             dt = np.array([np.datetime64(ttt) for ttt in D.time.values])
-            assert os.path.exists(fsp3)
+            # assert os.path.exists(fsp3)
             if el_mask is not None:
                 aer = getIonosphericPiercingPoints(D.position, sv, dt, 
                                                    ipp_alt=H, navfn=fsp3,
@@ -920,57 +991,155 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                     aer = getIonosphericPiercingPoints(D.position, sv, dt, 
                                                    ipp_alt=H, navfn=fsp3,
                                                    cs='aer', rx_xyz_coords='xyz')
-                AER[idel, isv, 0] = aer[0][idel]
-                AER[idel, isv, 1] = aer[1][idel]
-                AER[idel, isv, 2] = aer[2][idel]
+                AER[:, isv, 0] = aer[0]
+                AER[:, isv, 1] = aer[1]
+                AER[:, isv, 2] = aer[2]
         else:
             idel = np.ones(D.time.values.size, dtype=bool)
-        
         if int(D.version) == 2:
             if sv[0] == 'G':
                 if 'C1' in list(D.variables):
-                    stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
-                                             P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv], channel=2,
-                                             maxgap=maxgap, maxjump=maxjump)
+                    if 'C2' in list(D.variables) and np.sum(np.isfinite(D.sel(sv=sv).C2.values)) > 0:
+                        A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
+                                                 P1=D.C1.values[idel,isv], P2=D.C2.values[idel,isv], 
+                                                 f1=g1, f2=g2,
+                                                 el=AER[idel,isv,1], return_tec_err=return_tec_error,
+                                                 maxgap=maxgap, maxjump=maxjump, )
+                    else:
+                        A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
+                                                 P1=D.C1.values[idel,isv], P2=D.P2.values[idel,isv],
+                                                 f1=g1, f2=g2,
+                                                 el=AER[idel,isv,1], return_tec_err=return_tec_error,
+                                                 maxgap=maxgap, maxjump=maxjump)
+                        
                 elif 'P1' in list(D.variables):
-                    stec[idel, isv] = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
-                                             P1=D.P1.values[idel,isv], P2=D.P2.values[idel,isv], channel=2,
+                    A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L2.values[idel,isv],
+                                             P1=D.P1.values[idel,isv], P2=D.P2.values[idel,isv],
+                                             f1=g1, f2=g2,
+                                             el=AER[idel,isv,1], return_tec_err=return_tec_error,
                                              maxgap=maxgap, maxjump=maxjump)
                 else:
-                    stec[idel, isv] = np.nan * np.arange(np.nansum(idel))
+                    A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
+                    
             elif sv[0] == 'E':
-                stec[idel, isv] = getPhaseCorrTEC(L1=D.L8.values[idel,isv], L2=D.L8.values[idel,isv],
-                                         P1=D.C8.values[idel,isv], P2=D.C8.values[idel,isv], channel=8,
-                                         maxgap=maxgap, maxjump=maxjump)
+                if "L8" in list(D.variables):
+                    A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L8.values[idel,isv],
+                                             P1=D.C1.values[idel,isv], P2=D.C8.values[idel,isv],
+                                             f1=e1, f2=e8,
+                                             el=AER[idel,isv,1], return_tec_err=return_tec_error,
+                                             maxgap=maxgap, maxjump=maxjump)
+                elif "L5" in list(D.variables):
+                    A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L5.values[idel,isv],
+                                             P1=D.C1.values[idel,isv], P2=D.C5.values[idel,isv],
+                                             f1=e1, f2=e5,
+                                             el=AER[idel,isv,1], return_tec_err=return_tec_error,
+                                             maxgap=maxgap, maxjump=maxjump)
+                elif "L6" in list(D.variables):
+                    A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L6.values[idel,isv],
+                                             P1=D.C1.values[idel,isv], P2=D.C6.values[idel,isv],
+                                             f1=e1, f2=e6,
+                                             el=AER[idel,isv,1], return_tec_err=return_tec_error,
+                                             maxgap=maxgap, maxjump=maxjump)
+                elif "L7" in list(D.variables):
+                    A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L7.values[idel,isv],
+                                             P1=D.C1.values[idel,isv], P2=D.C7.values[idel,isv],
+                                             f1=e1, f2=e7,
+                                             el=AER[idel,isv,1], return_tec_err=return_tec_error,
+                                             maxgap=maxgap, maxjump=maxjump)
+                else:
+                    A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
             else:
+                A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
                 print (f"Constallation {sv[0]} not yet supported")
         elif int(D.version) == 3:
             if sv[0] == 'G':
-                stec[idel, isv] = getPhaseCorrTEC(L1=D['L1C'].values[idel,isv], L2=D['L2W'].values[idel,isv],
-                                         P1=D['C1C'].values[idel,isv], P2=D['C2W'].values[idel,isv], channel=2,
+                if 'L2L' in list(D.variables):
+                    if np.sum(np.isfinite(D.sel(sv=sv)['L2L'].values)) > 0:
+                        lf2, cf2 = 'L2L', 'C2L'
+                    elif np.sum(np.isfinite(D.sel(sv=sv)['L2W'].values)) > 0:
+                        lf2, cf2 = 'L2W', 'C2W'
+                    elif np.sum(np.isfinite(D.sel(sv=sv)['L2Y'].values)) > 0:
+                        lf2, cf2 = 'L2Y', 'C2Y'
+                    else:
+                        A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
+                elif 'L2W' in list(D.variables):
+                    lf2, cf2 = 'L2W', 'C2W'
+                elif 'L2Y' in list(D.variables):
+                    lf2, cf2 = 'L2Y', 'C2Y'
+                else:
+                    A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
+                A = getPhaseCorrTEC(L1=D['L1C'].values[idel,isv], L2=D[lf2].values[idel,isv],
+                                         P1=D['C1C'].values[idel,isv], P2=D[cf2].values[idel,isv], 
+                                         f1=g1,f2=g2,
+                                         el=AER[idel,isv,1], return_tec_err=return_tec_error,
                                          maxgap=maxgap, maxjump=maxjump)
             elif sv[0] == 'E':
-                E_signals = np.array(list(D.variables)[1:-1]) # Remove 'time' and 'sv' from variables
-                E1_signals = E_signals[np.array(list(map(lambda x: bool(re.match(r'C1[A-Z]', x)), E_signals)))]
-                E8_signals = E_signals[np.array(list(map(lambda x: bool(re.match(r'C8[A-Z]', x)), E_signals)))]
-                count = []
-                for ie, e in enumerate(E1_signals):
-                    count.append(np.sum(np.isfinite(D[E1_signals[ie]].values)))
-                e1X = E1_signals[np.array(count).argmax()][-1]
-                count = []
-                for ie, e in enumerate(E8_signals):
-                    count.append(np.sum(np.isfinite(D[E8_signals[ie]].values)))
-                e8X = E8_signals[np.array(count).argmax()][-1]
+                E_primary_signal = np.array(list(D.variables)[1:-1])[np.array(list(map(lambda x: bool(re.match(r'L1[A-Z]', x)), np.array(list(D.variables)[1:-1]))))]
+                if E_primary_signal.size < 1:
+                    continue
                 
-                stec[idel, isv] = getPhaseCorrTEC(L1=D[f'L1{e1X}'].values[idel,isv], L2=D[f'L8{e8X}'].values[idel,isv],
-                                         P1=D[f'C1{e1X}'].values[idel,isv], P2=D[f'C8{e8X}'].values[idel,isv],channel=8,
-                                         maxgap=maxgap, maxjump=maxjump)
+                E_signals = np.array(list(D.variables)[1:-1])[np.array(list(map(lambda x: bool(re.match(r'L[5-8][A-Z]', x)), np.array(list(D.variables)[1:-1]))))] 
+                counts = np.argsort([np.sum(np.isfinite(D.sel(sv=sv)[sig].values)) for sig in E_signals])
+                if int(E_signals[counts[-1]][1]) == 5:
+                    ff2 = e5
+                elif int(E_signals[counts[-1]][1]) == 6:
+                    ff2 = e6
+                elif int(E_signals[counts[-1]][1]) == 7:
+                    ff2 = e7
+                elif int(E_signals[counts[-1]][1]) == 8:
+                    ff2 = e8
+                else:
+                    pass
+                A = getPhaseCorrTEC(L1=D[f'{E_primary_signal[0]}'].values[idel,isv], L2=D[f'{E_signals[counts[-1]]}'].values[idel,isv],
+                                    P1=D[f'C{E_primary_signal[0][1:]}'].values[idel,isv], P2=D[f'C{E_signals[counts[-1]][1:]}'].values[idel,isv],
+                                    f1=e1, f2=ff2,
+                                    el=AER[idel,isv,1], return_tec_err=return_tec_error,
+                                    maxgap=maxgap, maxjump=maxjump)
+            elif sv[0] == 'C':
+                C_primary_signals = np.array(list(D.variables)[1:-1])[np.array(list(map(lambda x: bool(re.match(r'L[1-2][A-Z]', x)), np.array(list(D.variables)[1:-1]))))] 
+                C_secondary_signals = np.array(list(D.variables)[1:-1])[np.array(list(map(lambda x: bool(re.match(r'L[3-9][A-Z]', x)), np.array(list(D.variables)[1:-1]))))] 
+                primary_counts = np.argsort([np.sum(np.isfinite(D.sel(sv=sv)[sig].values)) for sig in C_primary_signals])[::-1]
+                secondary_counts = np.argsort([np.sum(np.isfinite(D.sel(sv=sv)[sig].values)) for sig in C_secondary_signals])[::-1]
+                signals = [a[1] for a in C_primary_signals]
+                if primary_counts.size > 0:
+                    pp = C_primary_signals[primary_counts[0]]
+                    if '1' in pp:
+                        ff1 = c1
+                    else:
+                        ff1 = c2
+                else:
+                    A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
+                    
+                if int(C_secondary_signals[secondary_counts[0]][1]) == 5:
+                    ff2 = c5
+                elif int(C_secondary_signals[secondary_counts[0]][1]) == 6:
+                    ff2 = c6
+                elif int(C_secondary_signals[secondary_counts[0]][1]) == 7:
+                    ff2 = c7
+                elif int(C_secondary_signals[secondary_counts[0]][1]) == 8:
+                    ff2 = c8
+                else:
+                    pass
+                A = getPhaseCorrTEC(L1=D[f'{pp}'].values[idel,isv], L2=D[f'{C_secondary_signals[secondary_counts[0]]}'].values[idel,isv],
+                                    P1=D[f'C{C_primary_signals[primary_counts[0]][1:]}'].values[idel,isv], P2=D[f'C{C_secondary_signals[secondary_counts[0]][1:]}'].values[idel,isv],
+                                    f1=ff1, f2=ff2,
+                                    el=AER[idel,isv,1], return_tec_err=return_tec_error,
+                                    maxgap=maxgap, maxjump=maxjump)
+                
             else:
                 print (f"Constallation {sv[0]} not yet supported")
         else:
             print (f"Rinex version {D.version} is not supported!")
-    if return_aer:
+        if return_tec_error:
+            stec[idel, isv], tec_sigma[idel, isv] = A
+        else:
+            stec[idel, isv] = A
+    if return_aer and return_tec_error:
+        return stec, tec_sigma, AER
+    elif return_aer and not return_tec_error:
         return stec, AER
+    elif return_tec_error and not return_aer:
+        return stec, tec_sigma
     else:
         return stec
 
@@ -1044,34 +1213,34 @@ def getVTEC2(D, F, tskip=1, el_mask=30, maxgap=1, maxjump=1):
     
     return vtec
 
-def getDCBfromSTEC(y, aer, el_mask=30, H=350, ts=30, decimate=False,
+def getDCBfromSTEC(stec, aer, sb=None, el_mask=30, H=350, ts=30, decimate=False,
                    x0 = None, tskip = None, return_mapping_f = False,
-                   ROTI=None, ROTIc= 0.4, SNRc=30, SNR=None):
+                   ROTI=None, roti_cutoff= 0.4, snr_cutoff=30, SNR=None):
     def _fun(p, stec, F):
         vtec = (stec - p) * F
         ret = np.nansum(np.nanstd(vtec, axis=1)**2)
         return ret
-    if decimate:
-        target = 60
-        tskip = int(target/ts)
-    else:
-        tskip = 1
+    # Target time resolution = 5 min
+    decimate = int(5 * (60/ts))
+    y = np.copy(stec[::decimate,:])
+    #Mapping Function
+    F = np.nan * np.zeros(y.shape)
+    for i in range(stec.shape[1]):
+        F[:, i] = getMappingFunction(aer[::decimate,i,1], H) 
+    #Elevation, ROTI and SNR Masking
     idnan = np.zeros(y.shape, dtype=bool)
+    idnan = np.logical_or(idnan, aer[::decimate,:,1] < el_mask)
     if ROTI is not None:
-        idnan = np.logical_or(idnan, ROTI >= ROTIc)
+        idnan = np.logical_or(idnan, ROTI[::decimate, :] > roti_cutoff)
     if SNR is not None:
-        idnan = np.logical_or(idnan, SNR < SNRc)
-    stec = np.copy(y)
-    stec[idnan] = np.nan
-    
-    stec = stec[::tskip, :]
-    F = np.nan * np.copy(stec)
-    for isv in range(stec.shape[1]):
-        F[:, isv] = getMappingFunction(aer[::tskip,isv,1], h=H)
+        idnan = np.logical_or(idnan, SNR[::decimate, :] < snr_cutoff)
+    y[idnan] = np.nan
     # LEAST sQUARES FIT
-    if x0 is None:
-        x0 = np.zeros(stec.shape[1]) 
-    sb_lsq = least_squares(_fun, x0, args=(stec, F), loss='soft_l1')
+    if sb is None:
+        sb = np.zeros(stec.shape[1])
+    x0 = np.copy(sb)
+    sb_lsq = least_squares(_fun, x0, args=(y, F), loss='soft_l1')
+    return sb_lsq.x
     
     if return_mapping_f:
         return sb_lsq.x, F
@@ -1148,9 +1317,13 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
 def getCNR(D, fsp3=None, el_mask=30, H=350, key='S1'):
     if isinstance(D, str):
         D = gr.load(D)
-    
+    snr_keys = np.array(list(D.variables)[1:-1])[np.array(list(map(lambda x: bool(re.match(r'S[1-9][A-Z]', x)), np.array(list(D.variables)[1:-1]))))]
+    if snr_keys.size == 0:
+        return np.nan * np.ones((D.time.size, D.sv.values.size))
+        
     if int(D.version) == 3 and len(key) == 2:
-        key += 'C'
+        imax = np.array([np.sum(np.isfinite(D[k].values)) for k in snr_keys]).argmax()
+        key = snr_keys[imax]
     time = D.time.values
     try:
         CNO = D[key].values
@@ -1158,9 +1331,10 @@ def getCNR(D, fsp3=None, el_mask=30, H=350, key='S1'):
         CNO = np.nan * np.ones((D.time.size, D.sv.values.size))
     
     if (fsp3 is not None) and (CNO is not None):
-        assert os.path.exists(fsp3)
+        assert fsp3 is not None
         try:
             dt = np.array([np.datetime64(ttt) for ttt in time]).astype('datetime64[s]').astype(datetime)
+            # print (dt)
             for isv, sv in enumerate(D.sv.values):
                 aer = getIonosphericPiercingPoints(D.position, sv, dt, 
                                                   ipp_alt=H, navfn=fsp3,
@@ -1169,6 +1343,7 @@ def getCNR(D, fsp3=None, el_mask=30, H=350, key='S1'):
                 CNO[idel, isv] = np.nan
         except:
             pass
+    CNO[CNO<1] = np.nan
     return CNO
 
 def getDTEC(fnc, fsp3, el_mask=30, maxjump=1.6, maxgap=1, eps=1, tsps=30):
