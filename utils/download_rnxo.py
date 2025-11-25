@@ -59,6 +59,7 @@ urllist = {'cddis': 'https://cddis.nasa.gov/archive/gnss/data/daily/',
            'fr': 'rgpdata.ensg.eu',
            'es': 'https://datos-geodesia.ign.es/ERGNSS/diario_30s/',
            'epos': 'https://datacenter.gnss-epos.eu/',
+           's': 'ftpswepos-open.lantmateriet.se',
            'au': 'ga-gnss-data-rinex-v1',
            'uk': 'https://api.os.uk/positioning/osnet/v1/rinex/'
            }
