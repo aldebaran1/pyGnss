@@ -57,7 +57,7 @@ urllist = {'cddis': 'https://cddis.nasa.gov/archive/gnss/data/daily/',
            'nl': 'https://gnss1.tudelft.nl/dpga/rinex/',
            'd': 'https://igs.bkg.bund.de/root_ftp/GREF/obs/',
            'fr': 'rgpdata.ensg.eu/data/',
-           'fr2': 'ftp://renag.unice.fr/',
+           #'fr2': 'ftp://renag.unice.fr/',
            'es': 'https://datos-geodesia.ign.es/ERGNSS/diario_30s/',
            'epos': 'https://datacenter.gnss-epos.eu/',
            's': 'ftpswepos-open.lantmateriet.se',
@@ -975,8 +975,11 @@ if __name__ == '__main__':
                     getRinexObs(date = d, db = db, 
                             odir = P.dir, rx = P.rx, dllist = P.dllist, 
                             hr = P.highrate, force = P.force, fix = P.fixpath, v=v)
-                except:
-                    print (f"{db} Didn't work")
+                except Exception as e:
+                    if v:
+                        print (f"{e}, {db} Didn't work")
+                    else:
+                        pass
         elif P.db == 'highlat':
             a = ['cors', 'cddis', 'unavco', 'euref', 'sonel', 'epos', 's']
             for db in a:
