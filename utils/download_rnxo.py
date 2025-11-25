@@ -1022,7 +1022,8 @@ if __name__ == '__main__':
         exit()
     for d in dates:
         if P.db == 'all':
-            a = ['cors', 'cddis', 'unavco', 'brasil', 'chain', 'euref', 'ring', 'bev', 'sonel', 'nz', 'nl', 'd', 'fr', 'epos', 'es', 'au', 'uk']
+            #a = ['cors', 'cddis', 'unavco', 'brasil', 'chain', 'euref', 'ring', 'bev', 'sonel', 'nz', 'nl', 'd', 'fr', 'epos', 's', 'es', 'au', 'uk']
+            a = [k for k in urllist if not k.endswith("hr")]
             for db in a:
                 try:
                     getRinexObs(date = d, db = db, 
@@ -1031,7 +1032,7 @@ if __name__ == '__main__':
                 except:
                     print (f"{db} Didn't work")
         elif P.db == 'highlat':
-            a = ['cors', 'cddis', 'unavco', 'euref', 'sonel', 'epos']
+            a = ['cors', 'cddis', 'unavco', 'euref', 'sonel', 'epos', 's']
             for db in a:
                 getRinexObs(date = d, db = db, 
                             odir = P.dir, rx = P.rx, dllist = P.dllist, 
@@ -1043,13 +1044,13 @@ if __name__ == '__main__':
                             odir = P.dir, rx = P.rx, dllist = P.dllist, 
                             hr = P.highrate, force = P.force, fix = P.fixpath, v=v)
         elif P.db == 'south':
-            a = ['cddis', 'unavco', 'brasil', 'sonel']
+            a = ['cddis', 'unavco', 'brasil', 'sonel', 'au']
             for db in a:
                 getRinexObs(date = d, db = db, 
                             odir = P.dir, rx = P.rx, dllist = P.dllist, 
                             hr = P.highrate, force = P.force, fix = P.fixpath, v=v)
         elif P.db == 'europe':
-            a = ['euref', 'ring', 'bev', 'sonel', 'epos', 'd', 'nl', 'es', 'fr']
+            a = ['euref', 'ring', 'bev', 'sonel', 'epos', 'd', 'nl', 'es', 'fr', 's']
             for db in a:
                 getRinexObs(date = d, db = db, 
                             odir = P.dir, rx = P.rx, dllist = P.dllist, 
