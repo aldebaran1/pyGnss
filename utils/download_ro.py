@@ -38,7 +38,7 @@ def main(date, odir, const=None):
         if const == 'cosmic2':
             url = f'https://data.cosmic.ucar.edu/gnss-ro/cosmic2/nrt/level1b/{year}/{doy}/'
             pattern = f'podTc2_nrt_{year}_{doy}.tar.gz'
-        
+            print (pattern)
             datalist = []
             with urllib.request.urlopen(url, context=context) as response:
                 html = response.read().decode('ascii')
@@ -66,10 +66,9 @@ if __name__ == '__main__':
     p = ArgumentParser()
     p.add_argument('date', help='Single date or start,end dates, comma separated')
     p.add_argument('odir', type=str, help='Oudput Directory')
-    p.add_argument('-c', type=str, help="Which constallation? Supported: cosmic2", default='cosmic2')
+    p.add_argument('-c', '--constallation', type=str, help="Which constallation? Supported: cosmic2", default='cosmic2')
     
     P = p.parse_args()
     
-    main(P.date, P.odir)
-    
-    main(P.date, odir=P.odir)
+    #main(P.date, P.odir)    
+    main(P.date, odir=P.odir, const=P.constallation)
