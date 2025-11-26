@@ -1028,19 +1028,19 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                                              f1=e1, f2=e8,
                                              el=AER[idel,isv,1], return_tec_err=return_tec_error,
                                              maxgap=maxgap, maxjump=maxjump)
-                elif "L5" in list(D.variables):
+                elif ("L5" in list(D.variables)) and ("C5" in list(D.variables)):
                     A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L5.values[idel,isv],
                                              P1=D.C1.values[idel,isv], P2=D.C5.values[idel,isv],
                                              f1=e1, f2=e5,
                                              el=AER[idel,isv,1], return_tec_err=return_tec_error,
                                              maxgap=maxgap, maxjump=maxjump)
-                elif "L6" in list(D.variables):
+                elif ("L6" in list(D.variables)) and ("C6" in list(D.variables)):
                     A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L6.values[idel,isv],
                                              P1=D.C1.values[idel,isv], P2=D.C6.values[idel,isv],
                                              f1=e1, f2=e6,
                                              el=AER[idel,isv,1], return_tec_err=return_tec_error,
                                              maxgap=maxgap, maxjump=maxjump)
-                elif "L7" in list(D.variables):
+                elif ("L7" in list(D.variables)) and ("C7" in list(D.variables)):
                     A = getPhaseCorrTEC(L1=D.L1.values[idel,isv], L2=D.L7.values[idel,isv],
                                              P1=D.C1.values[idel,isv], P2=D.C7.values[idel,isv],
                                              f1=e1, f2=e7,
