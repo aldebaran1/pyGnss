@@ -41,14 +41,15 @@ hhindd = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11'
 
 urllist = {'cddis': 'https://cddis.nasa.gov/archive/gnss/data/daily/',
            'cddishr': 'https://cddis.nasa.gov/archive/gnss/data/highrate/',
-           'cors': 'https://geodesy.noaa.gov/corsdata/rinex/',
+           'zcors': 'https://geodesy.noaa.gov/corsdata/rinex/',
            'chain': 'http://chain.physics.unb.ca/data/gps/data/daily/',
            'chainhr': 'http://chain.physics.unb.ca/data/gps/data/highrate/',
            'euref': 'https://epncb.oma.be/pub/RINEX/',
            'eurefhr': 'https://igs.bkg.bund.de/root_ftp/EUREF/highrate/',
            'chile': 'https://gps.csn.uchile.cl/',
            'brasil': 'https://geoftp.ibge.gov.br/informacoes_sobre_posicionamento_geodesico/rbmc/dados/',
-           'unavco': 'https://data.unavco.org/archive/gnss/rinex3/obs/',
+           'unavco': 'https://data.unavco.org/archive/gnss/rinex/obs/',
+           'unavco3': 'https://data.unavco.org/archive/gnss/rinex3/obs/',
            'unavcohr': 'https://data.unavco.org/archive/gnss/highrate/1-Hz/rinex/',
            'ring': 'https://webring.gm.ingv.it:44324/rinex/RING/',
            'bev': 'https://gnss.bev.gv.at/at.gv.bev.dc/data/',
@@ -185,7 +186,7 @@ def getSingleRxUrl(year, doy, F, db, rxn, hr=False):
         stations = np.array(stations)
         
     # CORS db
-    elif db == 'cors':
+    elif db == 'zcors':
         match = rxn
         ds = [line.split()[-1] for line in d]
         ds = np.array(ds)
@@ -282,7 +283,7 @@ def getStateList(year, doy, F, db, rxn=None, hr=False):
                             stations.append(arg)
                         else:
                             pass
-        elif db == 'cors':
+        elif db == 'zcors':
             for line in d:
                 arg = line.split()[-1]
                 if (len(arg) == 4):
@@ -405,6 +406,10 @@ def getRinexObs(date,
                 rx = rx[:,0]
         else:
             exit()
+            
+    if db == 'cors':
+        db = 'zcors'
+        
     #CDDIS
     if db == 'cddis':
         ftps = ftplib.FTP_TLS(host='gdc.cddis.eosdis.nasa.gov')
@@ -561,7 +566,8 @@ def getRinexObs(date,
                     print ('{} wasnt found'.format(rx))
                 pass
         else:
-            url = f'{urllist[db]}/{year}/{doy}/'
+            # Do Rinex3 first
+            url = f'{urllist["unavco3"]}/{year}/{doy}/'
         
             r = requests.get(url, headers={"authorization": f"Bearer {token}"}, verify=False)
             d = []
@@ -569,6 +575,46 @@ def getRinexObs(date,
                 for data in r:
                     d.append(data.decode('ascii').replace('\n',''))
             soup = BeautifulSoup("".join(d), 'html.parser')
+            rxlist = []
+            for link in soup.find_all('a'):
+                if link.get('href') is not None and link.get('href') is not None and link.get('href').endswith("MO.crx.gz"):
+                    rxlist.append(link.get('href'))
+            rxlist = np.unique(rxlist)
+            flist = sorted(glob(odir+os.sep+'*'))
+            fnames = np.array([os.path.split(f)[1][:4].lower() for f in flist])
+            if v:
+                print (f"Found {rxlist.size} rinex3 datafiles in ES Database.")
+            if rxlist is not None:
+                for rxentry in rxlist:
+                    ofn = f'{odir}/{rxentry.split("/")[-1]}'      
+                    
+                    if np.isin(rxentry.split("/")[-1][:4].lower(), fnames) and (not force):
+                        if v:
+                            print ('{} already exists'.format(rxentry))
+                        continue
+                    with open(ofn, 'wb') as f:
+                        if v:
+                            print (f"Downloading {rx.split('/')[-1]}:")
+                        r = requests.get(rxentry, headers={"authorization": f"Bearer {token}"}, verify=False)
+                        try:
+                            for data in r:
+                                f.write(data)
+                        except Exception as e:
+                            if v:
+                                print (e)
+                            else:
+                                pass
+                    f.close()
+            del soup, rxlist
+            # Download the remianing stations that have Rienx v2.11 files only
+            url = f'{urllist[db]}/{year}/{doy}/'
+            r = requests.get(url, headers={"authorization": f"Bearer {token}"}, verify=False)
+            d = []
+            if r.status_code == requests.codes.ok:
+                for data in r:
+                    d.append(data.decode('ascii').replace('\n',''))
+            soup = BeautifulSoup("".join(d), 'html.parser')
+            rxlist = []
             for link in soup.find_all('a'):
                 if link.get('href') is not None and len(link.get('href').split('/')[-1]) == 14:
                     rxlist.append(link.get('href').split('/')[-1][:4])
@@ -576,30 +622,34 @@ def getRinexObs(date,
             if isinstance(rx, str):
                 irx = np.isin(np.asarray(rxlist), rx)
                 rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
-            
+            print (rxlist)
             if rxlist is not None:
                 if v:
                     print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
                 flist = sorted(glob(odir+os.sep+'*'))
                 fnames = np.array([os.path.split(f)[1][:4] for f in flist])
-                for rx in rxlist:
-                    if np.isin(rx, fnames) and (not force):
-                        print ('{} already exists'.format(rx))
+                for rxentry in rxlist:
+                    print (rxentry)
+                    if np.isin(rxentry, fnames) and (not force):
+                        if v:
+                            print ('{} already exists'.format(rxentry))
                         continue
                     if hr:
-                        path = f"{url}/{rx}/{rx}{doy}0.{Y}d.Z"
-                        ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
+                        path = f"{url}/{rxentry}/{rxentry}{doy}0.{Y}d.Z"
+                        ofn = f'{odir}{rxentry}{doy}0.{Y}d.Z'
                     else:
-                        path = f"{url}/{rx}{doy}0.{Y}d.Z"
-                        ofn = f'{odir}{rx}{doy}0.{Y}d.Z'
+                        path = f"{url}/{rxentry}{doy}0.{Y}d.Z"
+                        ofn = f'{odir}{rxentry}{doy}0.{Y}d.Z'
                     if not os.path.exists(odir):
-                        print ("Making new directory:\n", odir)
+                        if v:
+                            print ("Making new directory:\n", odir)
                         if platform.system() in ('Linux', 'Darwin'):
                             subprocess.call(f'mkdir -p "{odir}"', shell=True)
                         else:
                             subprocess.call(f'mkdir "{odir}"', shell=True)
                     with open(ofn, 'wb') as f:
-                        print (f"Downloading {path}:")
+                        if v:
+                            print (f"Downloading {path}:")
                         r = requests.get(path, headers={"authorization": f"Bearer {token}"}, verify=False)
                         for data in r:
                             f.write(data)
@@ -609,7 +659,7 @@ def getRinexObs(date,
                     print ('{} wasnt found'.format(rx))
                 pass
 
-    elif db == 'cors':
+    elif db == 'zcors':
         url = f'{urllist[db]}/{year}/{doy}/'
         if hr:
             if v:
@@ -780,7 +830,7 @@ def getRinexObs(date,
     elif db == 'brasil':
         if hr:
             if v:
-                print ("CORS does not support highrate data files")
+                print ("Brasil does not support highrate data files")
             return 
         url = f'{urllist[db]}/{year}/{doy}/'
         rxlist = []
@@ -982,7 +1032,7 @@ def getRinexObs(date,
             
     elif db == 'ring':
         if hr:
-            print ("CORS does not support highrate data files")
+            print ("Ring does not support highrate data files")
             return 
         url = urllist[db]
         ftp = ftplib.FTP(url)
@@ -1047,13 +1097,13 @@ if __name__ == '__main__':
                     else:
                         pass
         elif P.db == 'highlat':
-            a = ['cors', 'cddis', 'unavco', 'euref', 'sonel', 'epos', 's']
+            a = ['zcors', 'cddis', 'unavco', 'euref', 'sonel', 'epos', 's']
             for db in a:
                 getRinexObs(date = d, db = db, 
                             odir = P.dir, rx = P.rx, dllist = P.dllist, 
                             hr = P.highrate, force = P.force, fix = P.fixpath, v=v)
         elif P.db == 'conus':
-            a = ['cors', 'unavco', 'cddis']
+            a = ['unavco', 'zcors', 'cddis']
             for db in a:
                 getRinexObs(date = d, db = db, 
                             odir = P.dir, rx = P.rx, dllist = P.dllist, 
