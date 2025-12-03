@@ -913,6 +913,60 @@ def getRinexObs(date,
         for urlrx in rxlist:
             download_cddis(ftp, urlrx, odir+urlrx, force=force)
     
+    elif db == 'uk':
+        if (datetime.now() - dt).days > 45:
+            return
+
+        osnet_token = "gTgH7TySS57jdAcXlllnXf8GuGmOkMjA"
+        url = f"{urllist[db]}/{year}/{doy}"
+        r = requests.get(url+f"?key={osnet_token}", verify=False)
+        # if r.status_code == requests.codes.ok:
+        for rr in r.json():
+            if rr['fileName'].endswith("MO.rnx.zip"):
+                download_request(rr['url'], f"{odir}{os.sep}uk{os.sep}{rr['fileName']}", force=1, hr=hr, v=v)
+                
+    elif db =='au':
+        prefix = f"public/daily/{year}/{doy}/"
+        s3 = boto3.client('s3', region_name='ap-southeast-2', config=Config(signature_version=UNSIGNED))
+        # response = s3.list_objects_v2(Bucket=urllist[db])
+        paginator = s3.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=urllist[db], Prefix=prefix)
+        file_count = 0
+        rxlist = []
+        for page in pages:
+            if 'Contents' in page:
+                for obj in page['Contents']:
+                    s3_key = obj['Key']
+                    filename = os.path.basename(s3_key)
+                    if filename[:4].lower() in rxlist:
+                        continue
+                    if filename.endswith('MO.crx.gz'):
+                        s3.download_file(urllist[db], s3_key, os.path.join(odir, filename))
+                        file_count+=1
+                        rxlist.append(filename[:4].lower())
+                        if v:
+                            print (f"Downloaded {filename} to {odir}")
+                    elif filename.endswith('MO.rnx.gz'):
+                        s3.download_file(urllist[db], s3_key, os.path.join(odir, filename))
+                        file_count+=1
+                        rxlist.append(filename[:4].lower())
+                        if v:
+                            print (f"Downloaded {filename} to {odir}")
+                    elif filename.endswith('d.gz'):
+                        s3.download_file(urllist[db], s3_key, os.path.join(odir, filename))
+                        file_count+=1
+                        rxlist.append(filename[:4].lower())
+                        if v:
+                            print (f"Downloaded {filename} to {odir}")
+                    elif filename.endswith('o.gz'):
+                        s3.download_file(urllist[db], s3_key, os.path.join(odir, filename))
+                        file_count+=1
+                        rxlist.append(filename[:4].lower())
+                        if v:
+                            print (f"Downloaded {filename} to {odir}")
+                    else:
+                         pass   
+        print(f"\nDownload complete. {file_count} files downloaded.")
             
     elif db == 'ring':
         if hr:
