@@ -622,14 +622,12 @@ def getRinexObs(date,
             if isinstance(rx, str):
                 irx = np.isin(np.asarray(rxlist), rx)
                 rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
-            print (rxlist)
             if rxlist is not None:
                 if v:
                     print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
                 flist = sorted(glob(odir+os.sep+'*'))
                 fnames = np.array([os.path.split(f)[1][:4] for f in flist])
                 for rxentry in rxlist:
-                    print (rxentry)
                     if np.isin(rxentry, fnames) and (not force):
                         if v:
                             print ('{} already exists'.format(rxentry))
