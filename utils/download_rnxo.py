@@ -717,10 +717,21 @@ def getRinexObs(date,
                 html = response.read().decode('ascii')
                 soup = BeautifulSoup(html, 'html.parser')
                 rxlist = []
+                #This is for Rinex3
                 for link in soup.find_all('a'):
                     if len(link.get('href').split('.')[0].split("_")) == 6:
                         rxlist.append(link.get('href'))
+                rxnames = np.array([r[:4].lower() for r in rxlist])
+                for link in soup.find_all('a'):
+                    if len(link.get('href')) < 13 or len(link.get('href').split(".")) < 3:
+                        continue
+                    rxn = link.get('href').split('.')[0][:4].lower()
+                    if rxn not in rxnames:
+                        rxlist.append(link.get('href'))
+                    
             rxlist = np.array(rxlist)
+            print (rxlist)
+            return
             rxnames = np.array([r[:4].lower() for r in rxlist])
                                 
             if isinstance(rx, str):
@@ -736,6 +747,7 @@ def getRinexObs(date,
             else:
                 ofn = f'{odir}/{rx.split("/")[-1]}'
             download_request(url+rx, ofn, force=force, hr=hr, v=v)
+            
     elif db == 'bev':
         rxlist = []
         if hr:
