@@ -13,7 +13,7 @@ import numpy as np
 import subprocess
 import os
 import platform
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import parser
 
 def unzip(f, timeout=10):
@@ -74,6 +74,7 @@ def getRinexNav(date:str = None,
     except Exception as e:
         raise (e)
     year = str(dt.year)
+    yy = dt.strftime("%y")
     doy = dt.timetuple().tm_yday
     # Correct spelling to unify the length (char) of the doy in year (DOY)
     if len(str(doy)) == 2:
@@ -92,31 +93,38 @@ def getRinexNav(date:str = None,
     ftps.prot_p()
     rpath = 'gnss/products/ionex/' + year + '/' + doy + '/'
     ftps.cwd(rpath)
-    urlrx = 'JPL0OPSRAP_' + year + doy + '0000_01D_02H_GIM.INX.gz' 
+    urlrx_new = 'ESA0OPSRAP_' + year + doy + '0000_01D_01H_GIM.INX.gz' 
+    urlrx_old = 'esag' + doy + '0.' + yy + 'i.Z'
     d = []
     ftps.retrlines('LIST', d.append)
-    download(ftps, urlrx, odir+urlrx)
+    files = [a.split()[-1] for a in d] 
+    if urlrx_new in files:
+        download(ftps, urlrx_new, odir+urlrx_new)
+        unzip(odir+urlrx_new)
+    elif urlrx_old in files:
+        download(ftps, urlrx_old, odir+urlrx_old)
+        unzip(odir+urlrx_old)
+    else:
+        pass
+    return
     
-    # # Open a connection to the FTP address
-    # with ftplib.FTP(url[1],'anonymous','guest',timeout=15) as F:
-    #     rpath = url[2] + '/' + year + '/' + doy + '/'
-    #     F.cwd(rpath)
-    #     # urlrx = 'jplg' +doy + '0.' + year[-2:] + 'i.Z'
-        
-    #     print (urlrx)
-    #     try:
-    #         # urlrx must in in a format "nnnDDD0.YYo.xxx"
-    #         download(F, urlrx, odir+urlrx)
-    #     except Exception as e:
-    #         print (e)
-            
-    unzip(odir+urlrx)
 if __name__ == '__main__':
     from argparse import ArgumentParser
     p = ArgumentParser()
-    p.add_argument('date', type=str, help='Date format YYYY-mm-dd')
+    p.add_argument('date', type=str, help='Date format YYYY-mm-dd in comma-separated start,end if wanted')
     p.add_argument('dir', type=str, help='destination directory')
-    
+
     P = p.parse_args()
+    dates = P.date.split(',')
+    if len(dates) < 1:
+        print ("the date is a required argument")
+        exit()
+    elif len(dates) == 2:
+        dtdates = np.arange(parser.parse(dates[0]),parser.parse(dates[1])+timedelta(hours=1), timedelta(days=1)).astype('datetime64[s]').astype(datetime)
+        dates = [t.strftime("%Y-%m-%d") for t in dtdates]
+    elif len(dates) > 2:
+        print ("Can't compile the dates")
+        exit()
+    for d in dates:
     # Get file
-    getRinexNav(date = P.date, odir = P.dir)
+        getRinexNav(date = d, odir = P.dir)
