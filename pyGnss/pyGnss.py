@@ -50,18 +50,27 @@ def getSatBias(fn, sv=None):
         else: 
             raise('No satbias files found in the folder')
             return 0
-    i = 0
+    read = 0
     svbias = {}
     with open(fn, 'r') as f:
-        while 1:
-            line = f.readline()
+        for line in f:
+        # line = f.readline()
+            # print (line)
             if 'DIFFERENTIAL CODE BIASES' in line:
-                while i < 32:
-                    l = f.readline().split()[:2]
-                    svbias['G'+l[0]] = float(l[1])
-                    i += 1
+                read = 1
+            if 'END OF AUX DATA' in line:
                 f.close()
                 break
+            if read:
+                if 'PRN' in line:
+                    l = line.split()
+                    print (l)
+                    if l[0].isdigit():
+                        svbias['G'+l[0]] = round(float(l[1])*2.852, 3) #convert ns to TECu
+                    else:
+                        svbias[l[0]] = round(float(l[1])*2.852, 3) #convert ns to TECu
+                # i += 1
+                # f.close()
     if sv is None:
         return svbias
     else:
