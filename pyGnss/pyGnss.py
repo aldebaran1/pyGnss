@@ -1315,9 +1315,14 @@ def getDCB(fnc, fsp3, jplg_file=None, el_mask=30, H=350,
         return sb_lsq.x
 
 def getCNR(D, fsp3=None, el_mask=30, H=350, key='S1'):
+    
     if isinstance(D, str):
         D = gr.load(D)
-    snr_keys = np.array(list(D.variables)[1:-1])[np.array(list(map(lambda x: bool(re.match(r'S[1-9][A-Z]', x)), np.array(list(D.variables)[1:-1]))))]
+    if int(D.version) in (1,2): 
+        snr_keys = np.array(list(D.variables))[np.array(list(map(lambda x: bool(re.match(r'S[1-9]', x)), np.array(list(D.variables)))))]
+    else:
+        snr_keys = np.array(list(D.variables))[np.array(list(map(lambda x: bool(re.match(r'S[1-9][A-Z]', x)), np.array(list(D.variables)))))]
+    
     if snr_keys.size == 0:
         return np.nan * np.ones((D.time.size, D.sv.values.size))
         
