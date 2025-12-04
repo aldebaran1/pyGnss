@@ -64,7 +64,6 @@ def getSatBias(fn, sv=None):
             if read:
                 if 'PRN' in line:
                     l = line.split()
-                    print (l)
                     if l[0].isdigit():
                         svbias['G'+l[0]] = round(float(l[1])*2.852, 3) #convert ns to TECu
                     else:
