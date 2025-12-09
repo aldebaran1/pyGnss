@@ -26,8 +26,8 @@ import ssl
 import string
 import warnings
 import boto3
-# from botocore import UNSIGNED
-# from botocore.config import Config
+from botocore import UNSIGNED
+from botocore.config import Config
 
 ssl._create_default_https_context = ssl._create_unverified_context
 #Change to your preference
@@ -36,7 +36,7 @@ warnings.filterwarnings("ignore")
 
 # token_path = os.path.expanduser("~") + f'{os.sep}pyGnss{os.sep}utils{os.sep}'
 gfzrnx_path = os.path.split(os.getcwd())[0] + f'{os.sep}gfzrnx{os.sep}'
-token_path= f'os.getcwd(){os.sep}'
+token_path= f'{os.getcwd()}{os.sep}'
 
 hhindd = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23']
 
@@ -612,7 +612,7 @@ def getRinexObs(date,
                         continue
                     with open(ofn, 'wb') as f:
                         if v:
-                            print (f"Downloading {rx.split('/')[-1]}:")
+                            print (f"Downloading {rxentry.split('/')[-1]}:")
                         r = requests.get(rxentry, headers={"authorization": f"Bearer {token}"}, verify=False)
                         try:
                             for data in r:
