@@ -26,16 +26,17 @@ import ssl
 import string
 import warnings
 import boto3
-from botocore import UNSIGNED
-from botocore.config import Config
+# from botocore import UNSIGNED
+# from botocore.config import Config
 
 ssl._create_default_https_context = ssl._create_unverified_context
 #Change to your preference
 
 warnings.filterwarnings("ignore")
 
-token_path = os.path.expanduser("~") + '/pyGnss/utils/'
-token_path= os.getcwd() + os.sep
+# token_path = os.path.expanduser("~") + f'{os.sep}pyGnss{os.sep}utils{os.sep}'
+gfzrnx_path = os.path.split(os.getcwd())[0] + f'{os.sep}gfzrnx{os.sep}'
+token_path= f'os.getcwd(){os.sep}'
 
 hhindd = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23']
 
@@ -66,7 +67,7 @@ urllist = {'cddis': 'https://cddis.nasa.gov/archive/gnss/data/daily/',
            'uk': 'https://api.os.uk/positioning/osnet/v1/rinex/'
            }
     
-def download_request(urlpath, filename, force=False, hr=False, v=False):
+def download_request(urlpath, filename, force=False, hr=False, exact=False, v=False):
     # Check is destination directory exists?
     path, tail = os.path.split(filename)
 
@@ -93,6 +94,20 @@ def download_request(urlpath, filename, force=False, hr=False, v=False):
     else:
         fn = filename
         fnamelist = fnlist
+    
+    if exact:
+        if (filename in flist) or (os.path.splitext(filename)[0] in flist):
+             print ('{} File already exists'.format(tail))
+        else:
+            try:
+                with urllib.request.urlopen(urlpath, timeout=60) as response, open(filename, 'wb') as out_file:
+                    data = response.read() # a `bytes` object
+                    out_file.write(data)
+            except Exception as e:
+                if v:
+                    print (e)
+                else:
+                    pass
     if not np.isin(fn, fnamelist):
         # Do you want to override it?
         if v:
@@ -102,7 +117,10 @@ def download_request(urlpath, filename, force=False, hr=False, v=False):
                 data = response.read() # a `bytes` object
                 out_file.write(data)
         except Exception as e:
-            print (e)
+            if v:
+                print (e)
+            else:
+                pass
         # Else skip the step
     else:
         if force:
@@ -980,10 +998,43 @@ def getRinexObs(date,
         osnet_token = "gTgH7TySS57jdAcXlllnXf8GuGmOkMjA"
         url = f"{urllist[db]}/{year}/{doy}"
         r = requests.get(url+f"?key={osnet_token}", verify=False)
-        # if r.status_code == requests.codes.ok:
-        for rr in r.json():
-            if rr['fileName'].endswith("MO.rnx.zip"):
-                download_request(rr['url'], f"{odir}{os.sep}uk{os.sep}{rr['fileName']}", force=1, hr=hr, v=v)
+        
+        # for rr in r.json():
+        #     if rr['fileName'].endswith("MO.rnx.zip"):
+        #         download_request(rr['url'], f"{odir}{os.sep}uk{os.sep}{rr['fileName']}", exact=True, hr=hr, v=v)
+
+        #Splice hourly files within the /uk/ sub-directory into daily files using gfzrnx
+        #get filenames
+        gfzrnx = glob(gfzrnx_path + "gfzrnx*")
+        if len(gfzrnx) == 0:
+            return
+        else:
+            gfzrnx = gfzrnx[0]
+        subprocess.call(f"python unzip_rm.py {odir}{os.sep}uk{os.sep}", shell=True)
+        filenames = np.array(sorted(glob((f"{odir}{os.sep}uk{os.sep}*.rnx"))))
+        rxnames = np.array([os.path.split(f)[1][:4] for f in filenames])
+        outfilenames = np.array(sorted(glob((f"{odir}{os.sep}*"))))
+        outrxnames = np.array([os.path.split(f)[1][:4].lower() for f in outfilenames])
+        for rx in np.unique(rxnames):
+            if rx.lower() in outrxnames:
+                continue
+            irx = np.isin(rxnames, rx)
+            frx = os.path.split(filenames[irx][0])[1].split("_")
+            frxinp = frx
+            frxout = frx
+            frxout[2] = frx[2][:-4] + "0000"
+            frxout[3] = "01D"
+            fout = odir + "_".join(frxout)
+            
+            frx = os.path.split(filenames[irx][0])[1].split("_")
+            frxinp[2] = frx[2][:-4] + "*"
+            frxinp[3] = frx[3]
+            finp = os.path.split(filenames[irx][0])[0] + os.sep +  "_".join(frxinp)
+            # finp = f"{odir}{os.sep}uk{os.sep}{rx}*{year}{doy}*.rnx"
+            command = f"{gfzrnx} -finp {finp} -fout {fout} -kv -q"
+            subprocess.call(f"{command}", shell=True)
+        return
+
                 
     elif db =='au':
         prefix = f"public/daily/{year}/{doy}/"
