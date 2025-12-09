@@ -1146,17 +1146,23 @@ if __name__ == '__main__':
                     else:
                         pass
         elif P.db == 'highlat':
-            a = ['zcors', 'cddis', 'unavco', 'euref', 'sonel', 'epos', 's']
+            a = ['cors', 'cddis', 'unavco', 'euref', 'sonel', 'epos', 's']
             for db in a:
                 getRinexObs(date = d, db = db, 
                             odir = P.dir, rx = P.rx, dllist = P.dllist, 
                             hr = P.highrate, force = P.force, fix = P.fixpath, v=v)
         elif P.db == 'conus':
-            a = ['unavco', 'zcors', 'cddis']
+            a = ['unavco', 'cors', 'cddis']
             for db in a:
-                getRinexObs(date = d, db = db, 
-                            odir = P.dir, rx = P.rx, dllist = P.dllist, 
-                            hr = P.highrate, force = P.force, fix = P.fixpath, v=v)
+                try:
+                    getRinexObs(date = d, db = db, 
+                                odir = P.dir, rx = P.rx, dllist = P.dllist, 
+                                hr = P.highrate, force = P.force, fix = P.fixpath, v=v)
+                except Exception as e:
+                    if v:
+                        print (f"{e}, {db} Didn't work")
+                    else:
+                        pass
         elif P.db == 'south':
             a = ['cddis', 'unavco', 'brasil', 'sonel', 'au']
             for db in a:
