@@ -1059,7 +1059,7 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
             else:
                 A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
                 print (f"Constallation {sv[0]} not yet supported")
-        elif int(D.version) == 3:
+        elif int(D.version) in (3,4):
             if sv[0] == 'G':
                 if 'L2L' in list(D.variables):
                     if np.sum(np.isfinite(D.sel(sv=sv)['L2L'].values)) > 0:
@@ -1136,8 +1136,10 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                 
             else:
                 print (f"Constallation {sv[0]} not yet supported")
+                A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
         else:
             print (f"Rinex version {D.version} is not supported!")
+            A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
         if return_tec_error:
             stec[idel, isv], tec_sigma[idel, isv] = A
         else:
