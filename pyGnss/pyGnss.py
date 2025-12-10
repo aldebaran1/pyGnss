@@ -355,7 +355,7 @@ def gpsSatPositionSP3(fsp3, dt, sv=None, rx_position=None, coords='xyz'):
         D = gr.load(fsp3)
     elif isinstance(fsp3, (list, np.ndarray)):
         L = np.array(fsp3).size
-        for i in range(L-1):
+        for i in range(L):
             if i == 0:
                 D = gr.load(fsp3[i])
             else:
@@ -365,7 +365,7 @@ def gpsSatPositionSP3(fsp3, dt, sv=None, rx_position=None, coords='xyz'):
     else:
         print (f"{fsp3} is in an unrecognized format.")
         return
-    
+    D = D.drop_duplicates(dim='time', keep='first')
     svlist = D.sv.values
     
     if sv in svlist:
