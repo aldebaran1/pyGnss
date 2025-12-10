@@ -1082,11 +1082,11 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                                          el=AER[idel,isv,1], return_tec_err=return_tec_error,
                                          maxgap=maxgap, maxjump=maxjump)
             elif sv[0] == 'E':
-                E_primary_signal = np.array(list(D.variables)[1:-1])[np.array(list(map(lambda x: bool(re.match(r'L1[A-Z]', x)), np.array(list(D.variables)[1:-1]))))]
+                E_primary_signal = np.array(list(D.variables))[np.array(list(map(lambda x: bool(re.match(r'L1[A-Z]', x)), np.array(list(D.variables)))))]
                 if E_primary_signal.size < 1:
                     continue
                 
-                E_signals = np.array(list(D.variables)[1:-1])[np.array(list(map(lambda x: bool(re.match(r'L[5-8][A-Z]', x)), np.array(list(D.variables)[1:-1]))))] 
+                E_signals = np.array(list(D.variables))[np.array(list(map(lambda x: bool(re.match(r'L[5-8][A-Z]', x)), np.array(list(D.variables)))))] 
                 counts = np.argsort([np.sum(np.isfinite(D.sel(sv=sv)[sig].values)) for sig in E_signals])
                 if int(E_signals[counts[-1]][1]) == 5:
                     ff2 = e5
@@ -1104,8 +1104,8 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                                     el=AER[idel,isv,1], return_tec_err=return_tec_error,
                                     maxgap=maxgap, maxjump=maxjump)
             elif sv[0] == 'C':
-                C_primary_signals = np.array(list(D.variables)[1:-1])[np.array(list(map(lambda x: bool(re.match(r'L[1-2][A-Z]', x)), np.array(list(D.variables)[1:-1]))))] 
-                C_secondary_signals = np.array(list(D.variables)[1:-1])[np.array(list(map(lambda x: bool(re.match(r'L[3-9][A-Z]', x)), np.array(list(D.variables)[1:-1]))))] 
+                C_primary_signals = np.array(list(D.variables))[np.array(list(map(lambda x: bool(re.match(r'L[1-2][A-Z]', x)), np.array(list(D.variables)))))] 
+                C_secondary_signals = np.array(list(D.variables))[np.array(list(map(lambda x: bool(re.match(r'L[3-9][A-Z]', x)), np.array(list(D.variables)))))] 
                 primary_counts = np.argsort([np.sum(np.isfinite(D.sel(sv=sv)[sig].values)) for sig in C_primary_signals])[::-1]
                 secondary_counts = np.argsort([np.sum(np.isfinite(D.sel(sv=sv)[sig].values)) for sig in C_secondary_signals])[::-1]
                 signals = [a[1] for a in C_primary_signals]
