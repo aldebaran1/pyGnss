@@ -1075,12 +1075,15 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                 elif 'L2Y' in list(D.variables):
                     lf2, cf2 = 'L2Y', 'C2Y'
                 else:
+                    lf2 = None
+                if lf2 is not None:
+                    A = getPhaseCorrTEC(L1=D['L1C'].values[idel,isv], L2=D[lf2].values[idel,isv],
+                                             P1=D['C1C'].values[idel,isv], P2=D[cf2].values[idel,isv], 
+                                             f1=g1,f2=g2,
+                                             el=AER[idel,isv,1], return_tec_err=return_tec_error,
+                                             maxgap=maxgap, maxjump=maxjump)
+                else:
                     A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
-                A = getPhaseCorrTEC(L1=D['L1C'].values[idel,isv], L2=D[lf2].values[idel,isv],
-                                         P1=D['C1C'].values[idel,isv], P2=D[cf2].values[idel,isv], 
-                                         f1=g1,f2=g2,
-                                         el=AER[idel,isv,1], return_tec_err=return_tec_error,
-                                         maxgap=maxgap, maxjump=maxjump)
             elif sv[0] == 'E':
                 E_primary_signal = np.array(list(D.variables))[np.array(list(map(lambda x: bool(re.match(r'L1[A-Z]', x)), np.array(list(D.variables)))))]
                 if E_primary_signal.size < 1:
