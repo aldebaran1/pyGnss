@@ -21,7 +21,7 @@ def unzip(f, timeout=10):
     print ('Unzipping: ', tail)
     if platform.system() in ('Linux', 'Darwin'):
         try:
-            subprocess.call('gzip -d ' + f, shell=True, timeout=timeout)
+            subprocess.call('gzip -d -f -q' + f, shell=True, timeout=timeout)
         except:
             print ('Problems with: ',tail)
     elif platform.system() == 'Windows':
