@@ -3,7 +3,7 @@
 """
 Created on Fri Mar  3 13:19:38 2017
 
-@author: Sebastijan Mrak <smrak@gmail.com>
+@author: Sebastijan Mrak <sebastijan.mrak@gmail.com>
 """
 
 # from six.moves.urllib.parse import urlparse
@@ -796,8 +796,8 @@ def getRinexObs(date,
                         rxlist.append(link.get('href'))
                     
             rxlist = np.array(rxlist)
-            print (rxlist)
-            return
+#            print (rxlist)
+#            return
             rxnames = np.array([r[:4].lower() for r in rxlist])
                                 
             if isinstance(rx, str):
@@ -999,9 +999,9 @@ def getRinexObs(date,
         url = f"{urllist[db]}/{year}/{doy}"
         r = requests.get(url+f"?key={osnet_token}", verify=False)
         
-        # for rr in r.json():
-        #     if rr['fileName'].endswith("MO.rnx.zip"):
-        #         download_request(rr['url'], f"{odir}{os.sep}uk{os.sep}{rr['fileName']}", exact=True, hr=hr, v=v)
+        for rr in r.json():
+             if rr['fileName'].endswith("MO.rnx.zip"):
+                 download_request(rr['url'], f"{odir}{os.sep}uk{os.sep}{rr['fileName']}", exact=True, hr=hr, v=v)
 
         #Splice hourly files within the /uk/ sub-directory into daily files using gfzrnx
         #get filenames
