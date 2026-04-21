@@ -23,7 +23,7 @@ from earthscope_sdk.auth.device_code_flow import DeviceCodeFlowSimple
 from earthscope_sdk.auth.auth_flow import NoTokensError
 from pathlib import Path
 import ssl
-import string
+import wget
 import warnings
 import boto3
 from botocore import UNSIGNED
@@ -100,7 +100,7 @@ def download_request(urlpath, filename, force=False, hr=False, exact=False, v=Fa
              print ('{} File already exists'.format(tail))
         else:
             try:
-                with urllib.request.urlopen(urlpath, timeout=60) as response, open(filename, 'wb') as out_file:
+                with urllib.request.urlopen(urlpath, timeout=180) as response, open(filename, 'wb') as out_file:
                     data = response.read() # a `bytes` object
                     out_file.write(data)
             except Exception as e:
@@ -113,7 +113,7 @@ def download_request(urlpath, filename, force=False, hr=False, exact=False, v=Fa
         if v:
             print ('Downloading file: {}'.format(tail))
         try:
-            with urllib.request.urlopen(urlpath, timeout=60) as response, open(filename, 'wb') as out_file:
+            with urllib.request.urlopen(urlpath, timeout=300) as response, open(filename, 'wb') as out_file:
                 data = response.read() # a `bytes` object
                 out_file.write(data)
         except Exception as e:
@@ -127,7 +127,7 @@ def download_request(urlpath, filename, force=False, hr=False, exact=False, v=Fa
             if v:
                 print ('Downloading file: {}'.format(tail))
             try:
-                with urllib.request.urlopen(urlpath, timeout=60) as response, open(filename, 'wb') as out_file:
+                with urllib.request.urlopen(urlpath, timeout=180) as response, open(filename, 'wb') as out_file:
                     data = response.read() # a `bytes` object
                     out_file.write(data)
             except Exception as e:
@@ -468,10 +468,14 @@ def getRinexObs(date,
         else:
             for rx in rxlist:
                 pth = rx.split('/')
-                ftps.cwd(f'{pth[0]}/{pth[1]}/')
-                download_cddis(ftps, pth[2], odir+pth[2], force=force, v=v)
-                ftps.cwd('../')
-                ftps.cwd('../')
+                if len(pth) > 1:
+                    ftps.cwd(f'{pth[0]}/{pth[1]}/')
+                    download_cddis(ftps, pth[2], odir+pth[2], force=force, v=v)
+                    ftps.cwd('../')
+                    ftps.cwd('../')
+                else:
+                    download_cddis(ftps, pth[0], odir+pth[0], force=force, v=v)
+
             
     elif db == 'chain':
         rxlist = []
@@ -762,22 +766,21 @@ def getRinexObs(date,
         
         if hr:
             rxlist = []
-            aainhh = np.array(list(string.ascii_lowercase[:23]))
-            for i, aa in enumerate(aainhh): 
-                urla = url + f'{aa}/'
-                with urllib.request.urlopen(urla) as response:
-                    html = response.read().decode('ascii')
-                    soup = BeautifulSoup(html, 'html.parser')
+            r = requests.get(url, verify=False)
+            if r.status_code == requests.codes.ok:
+                for data in r:
+                    soup = BeautifulSoup(data.decode('ascii', 'ignore'), 'html.parser')
                     for link in soup.find_all('a'):
-                        if len(link.get('href').split('.')[0].split("_")) == 6:
-                            rxlist.append(f"{aa}/{link.get('href')}")
+                        if link.get('href') is not None and link.get('href').endswith('tar.gz'):
+                                rxlist.append(link.get('href'))
+        
             rxlist = np.array(rxlist)
             rxnames = np.array([r.split('/')[-1][:4].lower() for r in rxlist])
-            
+
             if isinstance(rx, str):
                 irx = np.isin(rxnames, rx.lower())
                 rxlist = rxlist[irx] if np.sum(irx) > 0 else None
-                        
+            
         else:
             with urllib.request.urlopen(url) as response:
                 html = response.read().decode('ascii')
@@ -808,12 +811,18 @@ def getRinexObs(date,
         if v:
             print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
         for rx in rxlist:
-            if not hr:
-                ofn = f'{odir}/{rx}'
+            ofn = f'{odir}/{rx.split("/")[-1]}'
+            if not os.path.exists(ofn) or force:
+                response = requests.get(url+rx, stream=True, verify=False, timeout=(280, 180))
+                with open(ofn, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
             else:
-                ofn = f'{odir}/{rx.split("/")[-1]}'
-            download_request(url+rx, ofn, force=force, hr=hr, v=v)
-            
+                if v:
+                    print ('{} already exists'.format(ofn))
+                pass
+
     elif db == 'bev':
         rxlist = []
         if hr:
