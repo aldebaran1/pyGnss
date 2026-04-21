@@ -812,12 +812,21 @@ def getRinexObs(date,
             print ('Downloading {} receivers to: {}'.format(len(rxlist), odir))
         for rx in rxlist:
             ofn = f'{odir}/{rx.split("/")[-1]}'
+            
             if not os.path.exists(ofn) or force:
-                response = requests.get(url+rx, stream=True, verify=False, timeout=(280, 180))
-                with open(ofn, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
+                if v:
+                    print(f"Downloading {url+rx}")
+                try:
+                    response = requests.get(url+rx, stream=False, verify=False)
+                    with open(ofn, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                except Exception as e:
+                    if v:
+                        print(f"Error {e} occurred while downloading {ofn}")
+                        
+            
             else:
                 if v:
                     print ('{} already exists'.format(ofn))
