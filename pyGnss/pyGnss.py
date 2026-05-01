@@ -189,7 +189,7 @@ def getPhaseCorrTEC(L1, L2, P1, P2, ts, el=None, return_tec_err=False, f1=g1, f2
     #             ERR[r[0]:r[1]] = np.sqrt(TECsigma)
     #         TEC[r[0]:r[1]] = phase_tec - offset #median_difference
     if return_tec_err:
-        return rTEC, TEC, ERR, OFF
+        return TEC, ERR, OFF
     # elif intervals:
     #     return TEC, ranges
     else:       
