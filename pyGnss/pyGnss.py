@@ -948,39 +948,39 @@ def dataFromNC(fnc,fnav, sv, fsp3=None,
         D['ipp_alt'] = ipp_alt
     return D
 
-def processTEC(obs, sv, Ts = 30, frequency = 2, H=None, elevation=None, 
-               rx_bias=None, vtec = False, F_out=False, sat_bias=None):
-    if isinstance(obs, dict):
-        tec = slantTEC(obs['C1'], obs['P2'], 
-                        obs['L1'], obs['L2'], 
-                        frequency = frequency)
-    elif isinstance(obs, xarray.Dataset):
-        tec = getPhaseCorrTEC(obs['L1'].values, obs['L2'].values, 
-                        obs['C1'].values, obs['P2'].values, 
-                        )
+# def processTEC(obs, sv, Ts = 30, frequency = 2, H=None, elevation=None, 
+#                rx_bias=None, vtec = False, F_out=False, sat_bias=None):
+#     if isinstance(obs, dict):
+#         tec = slantTEC(obs['C1'], obs['P2'], 
+#                         obs['L1'], obs['L2'], 
+#                         frequency = frequency)
+#     elif isinstance(obs, xarray.Dataset):
+#         tec = getPhaseCorrTEC(obs['L1'].values, obs['L2'].values, 
+#                         obs['C1'].values, obs['P2'].values, 
+#                         )
         
-    if sat_bias is not None:
-        try:
-            b = 1 * getSatBias(sat_bias, sv=sv)
-        except:
-            b = 0
-    else:
-        b = 0
-    if rx_bias is not None:
-        b += rx_bias
-    assert elevation is not None
-    assert H is not None
-    if vtec:
-        tec += b
-        F = getMappingFunction(elevation, h = H)
-        tec = tec * F
+#     if sat_bias is not None:
+#         try:
+#             b = 1 * getSatBias(sat_bias, sv=sv)
+#         except:
+#             b = 0
+#     else:
+#         b = 0
+#     if rx_bias is not None:
+#         b += rx_bias
+#     assert elevation is not None
+#     assert H is not None
+#     if vtec:
+#         tec += b
+#         F = getMappingFunction(elevation, h = H)
+#         tec = tec * F
     
-    dtec = uf.getPlainResidual(tec, Ts=Ts)
+#     dtec = uf.getPlainResidual(tec, Ts=Ts)
     
-    if F_out:
-        return tec, dtec, F
-    else:
-        return tec, dtec
+#     if F_out:
+#         return tec, dtec, F
+#     else:
+#         return tec, dtec
     
 def getAER(times, rxp, fsp3, svlist = None, el_mask=None, H = 350):
     
@@ -1186,7 +1186,7 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
         else:
             stec[idel, isv] = A
     if return_aer and return_tec_error:
-        return stec, tec_sigma, offset, AER
+        return stec, tec_sigma, AER
     elif return_aer and not return_tec_error:
         return stec, AER
     elif return_tec_error and not return_aer:
