@@ -113,7 +113,7 @@ def getPhaseCorrTEC(L1, L2, P1, P2, ts, el=None, return_tec_err=False, f1=g1, f2
     if np.sum(np.isfinite(L1)) < 10*60/ts:
         # print ('Not enough data to compute TEC')
         if return_tec_err:
-            return np.nan * np.arange(L1.size), np.nan * np.arange(L1.size), np.nan * np.arange(L1.size), np.nan * np.arange(L1.size)
+            return np.nan * np.arange(L1.size), np.nan * np.arange(L1.size), np.nan * np.arange(L1.size)
         else:
             return np.nan * np.arange(L1.size)
 
@@ -149,45 +149,6 @@ def getPhaseCorrTEC(L1, L2, P1, P2, ts, el=None, return_tec_err=False, f1=g1, f2
         ERR[orbit[0]:orbit[1]] = np.sqrt(TECsigma)
         TEC[orbit[0]:orbit[1]] = tmp - offset
 
-    # for r in ranges:
-    #     if (r[1] - r[0]) > 1:
-    #         if fN is None: # GPS
-    #             # F1 = f1
-    #             # if channel == 2:
-    #                 # F2 = f2
-    #             # elif channel == 5:
-    #                 # F2 = f5
-    #             # elif channel == 8:
-    #                 # F2 = e8
-    #             range_tec = ((f1**2 * f2**2) / (f1**2 - f2**2)) * (P2[r[0] : r[1]] - 
-    #                                       P1[r[0] : r[1]]) /40.3 / pow(10, 16)
-    #             phase_tec = ((f1**2 * f2**2) / (f1**2 - f2**2)) * (c0/40.3) * \
-    #                      (L1[r[0] : r[1]] / f1 - L2[r[0] : r[1]] / f2) / pow(10, 16)
-    #         else: # GLONASS
-    #             f1 = (1602 + fN*0.5625) * 1000000
-    #             f2 = (1246 + fN*0.4375) * 1000000
-    #             range_tec = ((f1**2 * f2**2) / (f1**2 - f2**2)) * (P2[r[0] : r[1]] - 
-    #                                       P1[r[0] : r[1]]) /40.3 / pow(10, 16)
-    #             phase_tec = ((f1**2 * f2**2) / (f1**2 - f2**2)) * (c0/40.3) * \
-    #                      (L1[r[0] : r[1]] / f1 - L2[r[0] : r[1]] / f2) / pow(10, 16)
-    #         # tec_difference = np.array(sorted(phase_tec-range_tec))
-            
-    #         # tec_difference = tec_difference[np.isfinite(tec_difference)]
-    #         # median_difference = tec_difference[int(len(tec_difference)/2)]
-    #         # difference_width = tec_difference[int(len(tec_difference)*.75)]-tec_difference[int(len(tec_difference)*.25)]
-    #         # median_error = difference_width/np.sqrt(len(tec_difference))
-    #         # tec = phase_tec - median_difference
-    #         # ERR[r[0]:r[1]] = median_error
-    #         # TEC[r[0]:r[1]] = tec
-    #         tec_difference = phase_tec - range_tec
-    #         if el is not None:
-    #             w = np.sin(np.radians(el[r[0]:r[1]]))
-    #             offset = np.nansum(np.multiply(w, tec_difference)) / np.nansum(w)
-    #             TECsigma = (np.nansum(np.multiply(w, tec_difference**2)) * np.nansum(w) - np.nansum(np.multiply(w,tec_difference))**2) / (np.nansum(w)**2 - np.nansum(w**2)) 
-            
-    #             OFF[r[0]:r[1]] = tec_difference
-    #             ERR[r[0]:r[1]] = np.sqrt(TECsigma)
-    #         TEC[r[0]:r[1]] = phase_tec - offset #median_difference
     if return_tec_err:
         return TEC, ERR, OFF
     # elif intervals:
@@ -1065,8 +1026,11 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                                              el=AER[:,isv,1], return_tec_err=return_tec_error,
                                              maxgap=maxgap, maxjump=maxjump)
                 else:
-                    A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size) 
-                    
+                    if return_tec_error:
+                        A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
+                    else:
+                        A = np.nan * np.arange(idel.size)
+
             elif sv[0] == 'E':
                 if "L8" in list(D.variables):
                     A = getPhaseCorrTEC(L1=D.L1.sel(sv=sv).values, L2=D.L8.sel(sv=sv).values,
@@ -1093,9 +1057,15 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                                              el=AER[:,isv,1], return_tec_err=return_tec_error,
                                              maxgap=maxgap, maxjump=maxjump)
                 else:
-                    A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size) 
+                    if return_tec_error:
+                        A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
+                    else:
+                        A = np.nan * np.arange(idel.size)
             else:
-                A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size) 
+                if return_tec_error:
+                        A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
+                else:
+                    A = np.nan * np.arange(idel.size)
                 print (f"Constallation {sv[0]} not yet supported")
         elif int(D.version) in (3,4):
             if sv[0] == 'G':
@@ -1121,7 +1091,10 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                                         el=AER[:,isv,1], return_tec_err=return_tec_error,
                                         maxgap=maxgap, maxjump=maxjump)
                 else:
-                    A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size) 
+                    if return_tec_error:
+                        A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
+                    else:
+                        A = np.nan * np.arange(idel.size)
             elif sv[0] == 'E':
                 E_primary_signal = np.array(list(D.variables))[np.array(list(map(lambda x: bool(re.match(r'L1[A-Z]', x)), np.array(list(D.variables)))))]
                 if E_primary_signal.size < 1:
@@ -1157,7 +1130,10 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                     else:
                         ff1 = c2
                 else:
-                    A = np.nan * np.arange(np.nansum(idel)), np.nan * np.arange(np.nansum(idel)) 
+                    if return_tec_error:
+                        A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
+                    else:
+                        A = np.nan * np.arange(idel.size) 
                     
                 if int(C_secondary_signals[secondary_counts[0]][1]) == 5:
                     ff2 = c5
@@ -1177,10 +1153,16 @@ def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
                 
             else:
                 print (f"Constallation {sv[0]} not yet supported")
-                A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size) 
+                if return_tec_error:
+                    A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
+                else:
+                    A = np.nan * np.arange(idel.size) 
         else:
             print (f"Rinex version {D.version} is not supported!")
-            A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size) 
+            if return_tec_error:
+                A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
+            else:
+                A = np.nan * np.arange(idel.size)
         if return_tec_error:
             stec[:, isv], tec_sigma[:, isv], offset[:, isv] = A
         else:
