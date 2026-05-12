@@ -262,24 +262,57 @@ def AmplitudeScintillationIndex(data, N):
     return y
 
 def sigmaTEC(x, N):
-    def _loop(x,N):
-        tmp = np.nan * np.ones(x.size)
-        n2 = int(N/2)
-        iterate = np.arange(n2, x.size-n2)
-        for i in iterate:
-            if np.sum(np.isfinite(x[i-n2:i+n2])) > N/4:
-                tmp[i] = np.nanstd(x[i-n2:i+n2])
-        return tmp
-    idx = np.isnan(x)
-    if len(x.shape) == 1:
-        y = _loop(x, N)
+    input_is_dataset = isinstance(x, xarray.Dataset)
+    if isinstance(x, xarray.Dataset):
+        if 'sTEC' not in x:
+            raise KeyError("sigmaTEC() expects an 'sTEC' variable in the input Dataset")
+        data = x['sTEC']
+        return_numpy = False
+    elif isinstance(x, xarray.DataArray):
+        data = x
+        return_numpy = False
     else:
-        y = np.nan * np.ones(x.shape)
-        for k in range(x.shape[1]):
-            y[:,k] = _loop(x[:,k], N)
-        
-    y[idx] = np.nan
-    return y
+        values = np.asarray(x)
+        if values.ndim == 1:
+            data = xarray.DataArray(values, dims=('time',))
+        elif values.ndim == 2:
+            data = xarray.DataArray(values, dims=('time', 'sv'))
+        else:
+            raise ValueError('sigmaTEC() expects a 1D or 2D array-like input')
+        return_numpy = True
+
+    if 'time' not in data.dims:
+        raise ValueError("sigmaTEC() expects a 'time' dimension")
+
+    window = 2 * int(N / 2)
+    if window < 2:
+        sigma = data.copy(deep=True) * np.nan
+    else:
+        n2 = int(N / 2)
+        min_periods = int(N / 4) + 1
+        sigma = data.rolling(time=window, center=True,
+                             min_periods=min_periods).std(skipna=True)
+
+        time_index = xarray.DataArray(np.arange(data.sizes['time']),
+                                      dims=('time',),
+                                      coords={'time': data['time']})
+        valid_center = (time_index >= n2) & (time_index < data.sizes['time'] - n2)
+        sigma = sigma.where(valid_center)
+
+    sigma = sigma.where(data.notnull())
+    sigma.name = 'sigmaTEC'
+
+    if input_is_dataset:
+        if 'sv' not in x.coords:
+            raise ValueError("sigmaTEC() expects an input Dataset with 'sv' coordinates")
+        sigma = sigma.rename('sigma_tec')
+        return xarray.Dataset(
+            data_vars={'sigma_tec': (('time', 'sv'), sigma.values)},
+            coords={'time': x['time'].values, 'sv': x['sv'].values}
+        )
+    if return_numpy:
+        return sigma.values
+    return sigma
 
 def getROTI(sTEC: np.ndarray, ts: float = 1, N: int = 10):
     """Compute ROTI from input slantTEC 2D array [times,satellites]
@@ -965,216 +998,194 @@ def getAER(times, rxp, fsp3, svlist = None, el_mask=None, H = 350):
     
     return AER
     
-def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6,
-            return_aer = False, return_tec_error=False):
+def getSTEC(fnc, fsp3 = None, el_mask=30, H=350, maxgap=1, maxjump=1.6):
+    def _merge_observable_pair(primary_phase, primary_code, secondary_phase, secondary_code):
+        if not np.any(np.isfinite(secondary_phase)):
+            return primary_phase, primary_code
+
+        merged_phase = primary_phase.copy()
+        merged_code = primary_code.copy()
+        merged_phase[~np.isfinite(merged_phase)] = secondary_phase[~np.isfinite(merged_phase)]
+        merged_code[~np.isfinite(merged_code)] = secondary_code[~np.isfinite(merged_code)]
+        return merged_phase, merged_code
+
+    def _empty_result(size):
+        return (np.full(size, np.nan),
+                np.full(size, np.nan),
+                np.full(size, np.nan))
+
     if isinstance(fnc, xarray.Dataset):
-        D = fnc
+        D = fnc.copy()
     else:
         D = gr.load(fnc)
-    stec = np.nan * np.zeros((D.time.values.size, D.sv.size))
-    # rtec = np.nan * np.zeros((D.time.values.size, D.sv.size))
-    if return_tec_error:
-        tec_sigma = np.nan * np.zeros((D.time.values.size, D.sv.size))
-        offset = np.nan * np.zeros((D.time.values.size, D.sv.size))
-    ts = D.interval
-    if not np.isfinite(D.interval):
+    n_time = D.sizes['time']
+    n_sv = D.sizes['sv']
+    variables = np.array(list(D.variables))
+    variable_set = set(variables)
+    stec = np.full((n_time, n_sv), np.nan)
+    tec_sigma = np.full((n_time, n_sv), np.nan)
+    offset = np.full((n_time, n_sv), np.nan)
+    AER = np.full((n_time, n_sv, 3), np.nan)
+
+    ts = float(np.asarray(D.interval).squeeze())
+    if not np.isfinite(ts):
         ts = np.nanmedian(np.diff(D.time.values).astype('timedelta64[s]')).astype(int)
-    
-    AER = np.nan * np.ones((stec.shape[0], stec.shape[1], 3))
+
+    version = int(np.asarray(D.version).squeeze())
+    dt = np.asarray(D.time.values)
+
     for isv, sv in enumerate(D.sv.values):
-        
+        Dsv = D.isel(sv=isv)
+        valid = np.ones(n_time, dtype=bool)
+
         if fsp3 is not None:
-            dt = np.array([np.datetime64(ttt) for ttt in D.time.values])
-            # assert os.path.exists(fsp3)
+            aer = getIonosphericPiercingPoints(D.position, sv, dt,
+                                               ipp_alt=H, navfn=fsp3,
+                                               cs='aer', rx_xyz_coords='xyz')
             if el_mask is not None:
-                aer = getIonosphericPiercingPoints(D.position, sv, dt, 
-                                                   ipp_alt=H, navfn=fsp3,
-                                                   cs='aer', rx_xyz_coords='xyz')
-                idel = (aer[1] >= el_mask)
-            else:
-                idel = np.ones(dt.size, dtype=bool)
-            if return_aer:
-                if 'aer' not in locals():
-                    aer = getIonosphericPiercingPoints(D.position, sv, dt, 
-                                                   ipp_alt=H, navfn=fsp3,
-                                                   cs='aer', rx_xyz_coords='xyz')
-                AER[:, isv, 0] = aer[0]
-                AER[:, isv, 1] = aer[1]
-                AER[:, isv, 2] = aer[2]
-        else:
-            idel = np.ones(D.time.values.size, dtype=bool)
-        if int(D.version) == 2:
+                valid = aer[1] >= el_mask
+            AER[valid, isv, 0] = aer[0][valid]
+            AER[valid, isv, 1] = aer[1][valid]
+            AER[valid, isv, 2] = aer[2][valid]
+
+        el = AER[:, isv, 1]
+        tec_result = _empty_result(n_time)
+
+        if version == 2:
             if sv[0] == 'G':
-                if 'C1' in list(D.variables):
-                    if 'C2' in list(D.variables) and np.sum(np.isfinite(D.sel(sv=sv).C2.values)) > 0:
-                        A = getPhaseCorrTEC(L1=D.L1.sel(sv=sv).values, L2=D.L2.sel(sv=sv).values,
-                                                 P1=D.C1.sel(sv=sv).values, P2=D.C2.sel(sv=sv).values, 
-                                                 ts=ts, f1=g1, f2=g2,
-                                                 el=AER[:,isv,1], return_tec_err=return_tec_error,
-                                                 maxgap=maxgap, maxjump=maxjump, )
-                    else:
-                        A = getPhaseCorrTEC(L1=D.L1.sel(sv=sv).values, L2=D.L2.sel(sv=sv).values,
-                                                 P1=D.C1.sel(sv=sv).values, P2=D.P2.sel(sv=sv).values,
-                                                 ts=ts, f1=g1, f2=g2,
-                                                 el=AER[:,isv,1], return_tec_err=return_tec_error,
+                if 'C1' in variable_set:
+                    if 'C2' in variable_set and np.any(np.isfinite(Dsv['C2'].values)):
+                        tec_result = getPhaseCorrTEC(L1=Dsv['L1'].values, L2=Dsv['L2'].values,
+                                                     P1=Dsv['C1'].values, P2=Dsv['C2'].values,
+                                                     ts=ts, f1=g1, f2=g2, el=el,
+                                                     return_tec_err=True,
+                                                     maxgap=maxgap, maxjump=maxjump)
+                    elif 'P2' in variable_set:
+                        tec_result = getPhaseCorrTEC(L1=Dsv['L1'].values, L2=Dsv['L2'].values,
+                                                     P1=Dsv['C1'].values, P2=Dsv['P2'].values,
+                                                     ts=ts, f1=g1, f2=g2, el=el,
+                                                     return_tec_err=True,
+                                                     maxgap=maxgap, maxjump=maxjump)
+                elif 'P1' in variable_set and 'P2' in variable_set:
+                    tec_result = getPhaseCorrTEC(L1=Dsv['L1'].values, L2=Dsv['L2'].values,
+                                                 P1=Dsv['P1'].values, P2=Dsv['P2'].values,
+                                                 ts=ts, f1=g1, f2=g2, el=el,
+                                                 return_tec_err=True,
                                                  maxgap=maxgap, maxjump=maxjump)
-                        
-                elif 'P1' in list(D.variables):
-                    A = getPhaseCorrTEC(L1=D.L1.sel(sv=sv).values, L2=D.L2.sel(sv=sv).values,
-                                             P1=D.P1.sel(sv=sv).values, P2=D.P2.sel(sv=sv).values,
-                                             ts=ts, f1=g1, f2=g2,
-                                             el=AER[:,isv,1], return_tec_err=return_tec_error,
-                                             maxgap=maxgap, maxjump=maxjump)
-                else:
-                    if return_tec_error:
-                        A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
-                    else:
-                        A = np.nan * np.arange(idel.size)
 
             elif sv[0] == 'E':
-                if "L8" in list(D.variables):
-                    A = getPhaseCorrTEC(L1=D.L1.sel(sv=sv).values, L2=D.L8.sel(sv=sv).values,
-                                             P1=D.C1.sel(sv=sv).values, P2=D.C8.sel(sv=sv).values,
-                                             ts=ts, f1=e1, f2=e8,
-                                             el=AER[:,isv,1], return_tec_err=return_tec_error,
-                                             maxgap=maxgap, maxjump=maxjump)
-                elif ("L5" in list(D.variables)) and ("C5" in list(D.variables)):
-                    A = getPhaseCorrTEC(L1=D.L1.sel(sv=sv).values, L2=D.L5.sel(sv=sv).values,
-                                             P1=D.C1.sel(sv=sv).values, P2=D.C5.sel(sv=sv).values,
-                                             ts=ts, f1=e1, f2=e5,
-                                             el=AER[:,isv,1], return_tec_err=return_tec_error,
-                                             maxgap=maxgap, maxjump=maxjump)
-                elif ("L6" in list(D.variables)) and ("C6" in list(D.variables)):
-                    A = getPhaseCorrTEC(L1=D.L1.sel(sv=sv).values, L2=D.L6.sel(sv=sv).values,
-                                             P1=D.C1.sel(sv=sv).values, P2=D.C6.sel(sv=sv).values,
-                                             ts=ts, f1=e1, f2=e6,
-                                             el=AER[:,isv,1], return_tec_err=return_tec_error,
-                                             maxgap=maxgap, maxjump=maxjump)
-                elif ("L7" in list(D.variables)) and ("C7" in list(D.variables)):
-                    A = getPhaseCorrTEC(L1=D.L1.sel(sv=sv).values, L2=D.L7.sel(sv=sv).values,
-                                             P1=D.C1.sel(sv=sv).values, P2=D.C7.sel(sv=sv).values,
-                                             ts=ts, f1=e1, f2=e7,
-                                             el=AER[:,isv,1], return_tec_err=return_tec_error,
-                                             maxgap=maxgap, maxjump=maxjump)
+                if 'L8' in variable_set and 'C8' in variable_set:
+                    tec_result = getPhaseCorrTEC(L1=Dsv['L1'].values, L2=Dsv['L8'].values,
+                                                 P1=Dsv['C1'].values, P2=Dsv['C8'].values,
+                                                 ts=ts, f1=e1, f2=e8, el=el,
+                                                 return_tec_err=True,
+                                                 maxgap=maxgap, maxjump=maxjump)
+                elif {'L5', 'C5'}.issubset(variable_set):
+                    tec_result = getPhaseCorrTEC(L1=Dsv['L1'].values, L2=Dsv['L5'].values,
+                                                 P1=Dsv['C1'].values, P2=Dsv['C5'].values,
+                                                 ts=ts, f1=e1, f2=e5, el=el,
+                                                 return_tec_err=True,
+                                                 maxgap=maxgap, maxjump=maxjump)
+                elif {'L6', 'C6'}.issubset(variable_set):
+                    tec_result = getPhaseCorrTEC(L1=Dsv['L1'].values, L2=Dsv['L6'].values,
+                                                 P1=Dsv['C1'].values, P2=Dsv['C6'].values,
+                                                 ts=ts, f1=e1, f2=e6, el=el,
+                                                 return_tec_err=True,
+                                                 maxgap=maxgap, maxjump=maxjump)
+                elif {'L7', 'C7'}.issubset(variable_set):
+                    tec_result = getPhaseCorrTEC(L1=Dsv['L1'].values, L2=Dsv['L7'].values,
+                                                 P1=Dsv['C1'].values, P2=Dsv['C7'].values,
+                                                 ts=ts, f1=e1, f2=e7, el=el,
+                                                 return_tec_err=True,
+                                                 maxgap=maxgap, maxjump=maxjump)
                 else:
-                    if return_tec_error:
-                        A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
-                    else:
-                        A = np.nan * np.arange(idel.size)
+                    print (f"Constallation {sv[0]} not yet supported")
             else:
-                if return_tec_error:
-                        A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
-                else:
-                    A = np.nan * np.arange(idel.size)
                 print (f"Constallation {sv[0]} not yet supported")
-        elif int(D.version) in (3,4):
+
+        elif version in (3, 4):
             if sv[0] == 'G':
-                if 'L2L' in list(D.variables):
-                    if np.sum(np.isfinite(D.sel(sv=sv)['L2L'].values)) > 0:
-                        lf2, cf2 = 'L2L', 'C2L'
-                    elif np.sum(np.isfinite(D.sel(sv=sv)['L2W'].values)) > 0:
-                        lf2, cf2 = 'L2W', 'C2W'
-                    elif np.sum(np.isfinite(D.sel(sv=sv)['L2Y'].values)) > 0:
-                        lf2, cf2 = 'L2Y', 'C2Y'
-                    else:
-                        A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size) 
-                elif 'L2W' in list(D.variables):
-                    lf2, cf2 = 'L2W', 'C2W'
-                elif 'L2Y' in list(D.variables):
-                    lf2, cf2 = 'L2Y', 'C2Y'
-                else:
-                    lf2 = None
-                if lf2 is not None:
-                    A = getPhaseCorrTEC(L1=D['L1C'].sel(sv=sv).values, L2=D[lf2].sel(sv=sv).values,
-                                        P1=D['C1C'].sel(sv=sv).values, P2=D[cf2].sel(sv=sv).values, 
-                                        ts=ts, f1=g1, f2=g2,
-                                        el=AER[:,isv,1], return_tec_err=return_tec_error,
-                                        maxgap=maxgap, maxjump=maxjump)
-                else:
-                    if return_tec_error:
-                        A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
-                    else:
-                        A = np.nan * np.arange(idel.size)
+                L2 = P2 = None
+                if {'L2L', 'C2L'}.issubset(variable_set) and np.any(np.isfinite(Dsv['L2L'].values)):
+                    L2 = Dsv['L2L'].values
+                    P2 = Dsv['C2L'].values
+                elif {'L2W', 'C2W'}.issubset(variable_set):
+                    L2 = Dsv['L2W'].values
+                    P2 = Dsv['C2W'].values
+                    if {'L2Y', 'C2Y'}.issubset(variable_set):
+                        L2, P2 = _merge_observable_pair(L2, P2,
+                                                        Dsv['L2Y'].values,
+                                                        Dsv['C2Y'].values)
+                elif {'L2Y', 'C2Y'}.issubset(variable_set):
+                    L2 = Dsv['L2Y'].values
+                    P2 = Dsv['C2Y'].values
+
+                if L2 is not None and {'L1C', 'C1C'}.issubset(variable_set):
+                    tec_result = getPhaseCorrTEC(L1=Dsv['L1C'].values, L2=L2,
+                                                 P1=Dsv['C1C'].values, P2=P2,
+                                                 ts=ts, f1=g1, f2=g2, el=el,
+                                                 return_tec_err=True,
+                                                 maxgap=maxgap, maxjump=maxjump)
+
             elif sv[0] == 'E':
-                E_primary_signal = np.array(list(D.variables))[np.array(list(map(lambda x: bool(re.match(r'L1[A-Z]', x)), np.array(list(D.variables)))))]
-                if E_primary_signal.size < 1:
-                    continue
-                
-                E_signals = np.array(list(D.variables))[np.array(list(map(lambda x: bool(re.match(r'L[5-8][A-Z]', x)), np.array(list(D.variables)))))] 
-                counts = np.argsort([np.sum(np.isfinite(D.sel(sv=sv)[sig].values)) for sig in E_signals])
-                if int(E_signals[counts[-1]][1]) == 5:
-                    ff2 = e5
-                elif int(E_signals[counts[-1]][1]) == 6:
-                    ff2 = e6
-                elif int(E_signals[counts[-1]][1]) == 7:
-                    ff2 = e7
-                elif int(E_signals[counts[-1]][1]) == 8:
-                    ff2 = e8
-                else:
-                    pass
-                A = getPhaseCorrTEC(L1=D[f'{E_primary_signal[0]}'].sel(sv=sv).values, L2=D[f'{E_signals[counts[-1]]}'].sel(sv=sv).values,
-                                    P1=D[f'C{E_primary_signal[0][1:]}'].sel(sv=sv).values, P2=D[f'C{E_signals[counts[-1]][1:]}'].sel(sv=sv).values,
-                                    ts=ts, f1=e1, f2=ff2,
-                                    el=AER[:,isv,1], return_tec_err=return_tec_error,
-                                    maxgap=maxgap, maxjump=maxjump)
+                E_primary_signal = variables[np.array([bool(re.match(r'L1[A-Z]', x)) for x in variables])]
+                E_signals = variables[np.array([bool(re.match(r'L[5-8][A-Z]', x)) for x in variables])]
+                if E_primary_signal.size > 0 and E_signals.size > 0:
+                    counts = np.argsort([np.sum(np.isfinite(Dsv[sig].values)) for sig in E_signals])
+                    secondary_signal = E_signals[counts[-1]]
+                    freq_idx = int(secondary_signal[1])
+                    freq_map = {5: e5, 6: e6, 7: e7, 8: e8}
+                    primary_code = f'C{E_primary_signal[0][1:]}'
+                    secondary_code = f'C{secondary_signal[1:]}'
+                    if primary_code in variable_set and secondary_code in variable_set and freq_idx in freq_map:
+                        tec_result = getPhaseCorrTEC(L1=Dsv[E_primary_signal[0]].values,
+                                                     L2=Dsv[secondary_signal].values,
+                                                     P1=Dsv[primary_code].values,
+                                                     P2=Dsv[secondary_code].values,
+                                                     ts=ts, f1=e1, f2=freq_map[freq_idx], el=el,
+                                                     return_tec_err=True,
+                                                     maxgap=maxgap, maxjump=maxjump)
+
             elif sv[0] == 'C':
-                C_primary_signals = np.array(list(D.variables))[np.array(list(map(lambda x: bool(re.match(r'L[1-2][A-Z]', x)), np.array(list(D.variables)))))] 
-                C_secondary_signals = np.array(list(D.variables))[np.array(list(map(lambda x: bool(re.match(r'L[3-9][A-Z]', x)), np.array(list(D.variables)))))] 
-                primary_counts = np.argsort([np.sum(np.isfinite(D.sel(sv=sv)[sig].values)) for sig in C_primary_signals])[::-1]
-                secondary_counts = np.argsort([np.sum(np.isfinite(D.sel(sv=sv)[sig].values)) for sig in C_secondary_signals])[::-1]
-                signals = [a[1] for a in C_primary_signals]
-                if primary_counts.size > 0:
-                    pp = C_primary_signals[primary_counts[0]]
-                    if '1' in pp:
-                        ff1 = c1
-                    else:
-                        ff1 = c2
-                else:
-                    if return_tec_error:
-                        A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
-                    else:
-                        A = np.nan * np.arange(idel.size) 
-                    
-                if int(C_secondary_signals[secondary_counts[0]][1]) == 5:
-                    ff2 = c5
-                elif int(C_secondary_signals[secondary_counts[0]][1]) == 6:
-                    ff2 = c6
-                elif int(C_secondary_signals[secondary_counts[0]][1]) == 7:
-                    ff2 = c7
-                elif int(C_secondary_signals[secondary_counts[0]][1]) == 8:
-                    ff2 = c8
-                else:
-                    pass
-                A = getPhaseCorrTEC(L1=D[f'{pp}'].sel(sv=sv).values, L2=D[f'{C_secondary_signals[secondary_counts[0]]}'].sel(sv=sv).values,
-                                    P1=D[f'C{C_primary_signals[primary_counts[0]][1:]}'].sel(sv=sv).values, P2=D[f'C{C_secondary_signals[secondary_counts[0]][1:]}'].sel(sv=sv).values,
-                                    ts=ts, f1=ff1, f2=ff2,
-                                    el=AER[:,isv,1], return_tec_err=return_tec_error,
-                                    maxgap=maxgap, maxjump=maxjump)
-                
+                C_primary_signals = variables[np.array([bool(re.match(r'L[1-2][A-Z]', x)) for x in variables])]
+                C_secondary_signals = variables[np.array([bool(re.match(r'L[3-9][A-Z]', x)) for x in variables])]
+                if C_primary_signals.size > 0 and C_secondary_signals.size > 0:
+                    primary_counts = np.argsort([np.sum(np.isfinite(Dsv[sig].values)) for sig in C_primary_signals])[::-1]
+                    secondary_counts = np.argsort([np.sum(np.isfinite(Dsv[sig].values)) for sig in C_secondary_signals])[::-1]
+                    primary_signal = C_primary_signals[primary_counts[0]]
+                    secondary_signal = C_secondary_signals[secondary_counts[0]]
+                    primary_freq = c1 if '1' in primary_signal else c2
+                    secondary_freq = {5: c5, 6: c6, 7: c7, 8: c8}.get(int(secondary_signal[1]))
+                    primary_code = f'C{primary_signal[1:]}'
+                    secondary_code = f'C{secondary_signal[1:]}'
+                    if primary_code in variable_set and secondary_code in variable_set and secondary_freq is not None:
+                        tec_result = getPhaseCorrTEC(L1=Dsv[primary_signal].values,
+                                                     L2=Dsv[secondary_signal].values,
+                                                     P1=Dsv[primary_code].values,
+                                                     P2=Dsv[secondary_code].values,
+                                                     ts=ts, f1=primary_freq, f2=secondary_freq, el=el,
+                                                     return_tec_err=True,
+                                                     maxgap=maxgap, maxjump=maxjump)
+
             else:
                 print (f"Constallation {sv[0]} not yet supported")
-                if return_tec_error:
-                    A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
-                else:
-                    A = np.nan * np.arange(idel.size) 
+
         else:
             print (f"Rinex version {D.version} is not supported!")
-            if return_tec_error:
-                A = np.nan * np.arange(idel.size), np.nan * np.arange(idel.size), np.nan * np.arange(idel.size)
-            else:
-                A = np.nan * np.arange(idel.size)
-        if return_tec_error:
-            stec[:, isv], tec_sigma[:, isv], offset[:, isv] = A
-        else:
-            stec[idel, isv] = A
-    if return_aer and return_tec_error:
-        return stec, tec_sigma, AER
-    elif return_aer and not return_tec_error:
-        return stec, AER
-    elif return_tec_error and not return_aer:
-        return stec, tec_sigma
-    else:
-        return stec
+
+        stec[:, isv], tec_sigma[:, isv], offset[:, isv] = [
+            np.where(valid, values, np.nan) for values in tec_result
+        ]
+
+    D = D.assign_coords(
+        az=(('time', 'sv'), AER[:, :, 0]),
+        el=(('time', 'sv'), AER[:, :, 1]),
+        range=(('time', 'sv'), AER[:, :, 2]),
+    )
+    D['sTEC'] = (('time', 'sv'), stec)
+    D['TEC_sigma'] = (('time', 'sv'), tec_sigma)
+    D['offset'] = (('time', 'sv'), offset)
+    return D
 
 def getVTEC(fnc, fsp3, dcb=None, jplg_file=None, el_mask=30, H=350,
             decimate=None, maxgap=1, maxjump=1.6, tec_shift=None,
@@ -1246,7 +1257,7 @@ def getVTEC2(D, F, tskip=1, el_mask=30, maxgap=1, maxjump=1):
     
     return vtec
 
-def getDCBfromSTEC(stec, aer, sb=None, el_mask=30, H=350, ts=30, decimate=False,
+def getDCBfromSTEC(stec, el, sb=None, el_mask=30, H=350, ts=30, decimate=False,
                    x0 = None, tskip = None, return_mapping_f = False,
                    ROTI=None, roti_cutoff= 0.4, snr_cutoff=30, SNR=None):
     def _fun(p, stec, F, w=None):
@@ -1272,16 +1283,16 @@ def getDCBfromSTEC(stec, aer, sb=None, el_mask=30, H=350, ts=30, decimate=False,
     #Mapping Function
     F = np.nan * np.zeros(y.shape)
     for i in range(stec.shape[1]):
-        F[:, i] = getMappingFunction(aer[::decimate,i,1], H) 
+        F[:, i] = getMappingFunction(el[::decimate, i], H) 
     #Elevation, ROTI and SNR Masking
     idnan = np.zeros(y.shape, dtype=bool)
-    idnan = np.logical_or(idnan, aer[::decimate,:,1] < el_mask)
+    idnan = np.logical_or(idnan, el[::decimate] < el_mask)
     if ROTI is not None:
         idnan = np.logical_or(idnan, ROTI[::decimate, :] > roti_cutoff)
     if SNR is not None:
         idnan = np.logical_or(idnan, SNR[::decimate, :] < snr_cutoff)
     y[idnan] = np.nan
-    w = np.sin(np.radians(aer[::decimate,:,1]))**2
+    w = np.sin(np.radians(el[::decimate]))**2
     # w = None
     # LEAST sQUARES FIT
     if sb is None:
