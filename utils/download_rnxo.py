@@ -61,11 +61,11 @@ urllist = {'cddis': 'https://cddis.nasa.gov/archive/gnss/data/daily/',
            'nz': 'https://data.geonet.org.nz/gnss/rinex/',
            'nl': 'https://gnss1.tudelft.nl/dpga/rinex/',
            'd': 'https://igs.bkg.bund.de/root_ftp/GREF/obs/',
-           'fr': 'rgpdata.ensg.eu/data/',
-           #'fr2': 'ftp://renag.unice.fr/',
+           'fr': 'rgpdata.ensg.eu',
+           'fr2': 'renag.unice.fr',
            'es': 'https://datos-geodesia.ign.es/ERGNSS/diario_30s/',
            'epos': 'https://datacenter.gnss-epos.eu/',
-           's': 'ftpswepos-open.lantmateriet.se',
+           's': 'swepos-open.lantmateriet.se',
            'au': 'ga-gnss-data-rinex-v1',
            'uk': 'https://api.os.uk/positioning/osnet/v1/rinex/'
            }
@@ -305,6 +305,7 @@ def getStateList(year, doy, F, db, rxn=None, hr=False):
                             stations.append(arg)
                         else:
                             pass
+
         elif db == 'zcors':
             for line in d:
                 arg = line.split()[-1]
@@ -333,10 +334,10 @@ def getStateList(year, doy, F, db, rxn=None, hr=False):
                 if arg.endswith(('d.Z', 'MO.crx.gz')):
                     stations.append(arg)
         
-        elif db in ('fr', 's'):
+        elif db in ('fr', 'fr2', 's'):
             for line in d:
                 arg = line.split()[-1]
-                if arg.endswith( '01D_30S_MO.crx.gz'):
+                if arg.endswith('01D_30S_MO.crx.gz'):
                     stations.append(arg)
                     
         elif db == 'unavco':
@@ -941,7 +942,7 @@ def getRinexObs(date,
     elif db == 'es':
         if hr:
             if v:
-                print ("New Zealand DB doesnt have highrate data")
+                print ("Espania DB doesnt have highrate data")
             return
         url = f'{urllist[db]}/{year}/{dt.strftime("%Y%m%d")}/'
         rxlist = []
@@ -1013,9 +1014,10 @@ def getRinexObs(date,
             elif db == 'fr':
                 rpath = f'pub/data_v3/{year}/{doy}/data_30/'
             elif db == 'fr2':
-                rpath = f'data/{year}/{doy}'
+                rpath = f'rinex3/{year}/{doy}/'
         ftp.cwd(rpath)
         rxlist = np.array(getStateList(year, doy, ftp, db, rxn=rx))
+        print (rxlist)
         if isinstance(rx, str):
             irx = np.isin(np.asarray(rxlist), rx)
             rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
@@ -1113,6 +1115,21 @@ def getRinexObs(date,
                          pass   
         print(f"\nDownload complete. {file_count} files downloaded.")
             
+    elif db == 's':
+        url = urllist[db]
+        ftp = ftplib.FTP(url)
+        ftp.login(user='smrak', passwd='e_8m1]t;#%')
+        rpath = f'/rinex3/{year}/{doy}/'
+        ftp.cwd(rpath)
+        rxlist = np.array(getStateList(year, doy, ftp, db, rxn=rx))
+        if isinstance(rx, str):
+            irx = np.isin(np.asarray(rxlist), rx)
+            rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
+
+        print ('{} Downloading {} receivers to: {}'.format(db, len(rxlist), odir))
+        for urlrx in rxlist:
+            download_cddis(ftp, urlrx, odir+urlrx, force=force, v=v)
+
     elif db == 'ring':
         if hr:
             print ("Ring does not support highrate data files")
@@ -1127,9 +1144,9 @@ def getRinexObs(date,
             irx = np.isin(np.asarray(rxlist), rx)
             rxlist = list(np.asarray(rxlist)[irx]) if np.sum(irx) > 0 else None
 
-        print ('{db} Downloading {} receivers to: {}'.format(len(rxlist), odir))
+        print ('{} Downloading {} receivers to: {}'.format(db, len(rxlist), odir))
         for urlrx in rxlist:
-            download_cddis(ftp, urlrx, odir+urlrx, force=force)
+            download_cddis(ftp, urlrx, odir+urlrx, force=force, v=v)
     else:
         raise('Wrong database')
 if __name__ == '__main__':
